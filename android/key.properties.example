@@ -1,0 +1,9 @@
+# Copy this file to key.properties (it is ignored by Git) and fill it in to sign
+# the release APK with your own key. Create the key once with:
+#   keytool -genkey -v -keystore bkdash-release.jks -keyalg RSA -keysize 2048 -validity 10000 -alias bkdash
+# and keep bkdash-release.jks + the passwords somewhere safe: without them you
+# can never publish an update of the app.
+storePassword=CHANGE_ME
+keyPassword=CHANGE_ME
+keyAlias=bkdash
+storeFile=C:\\keys\\bkdash-release.jks
