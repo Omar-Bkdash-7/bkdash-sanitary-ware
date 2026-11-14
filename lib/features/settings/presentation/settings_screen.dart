@@ -10,7 +10,6 @@ import 'package:bkdash_sanitary_ware/features/settings/presentation/settings_con
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-
 /// Appearance, security, data tools and information about the company.
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});

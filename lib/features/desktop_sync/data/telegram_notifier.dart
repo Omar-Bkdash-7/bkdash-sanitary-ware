@@ -22,9 +22,7 @@ class TelegramNotifier {
     final token = botToken.trim();
     final chat = chatId.trim();
     if (token.isEmpty || chat.isEmpty) {
-      throw const SyncException(
-        'أدخل رمز بوت Telegram ومعرّف المحادثة أولاً.',
-      );
+      throw const SyncException('أدخل رمز بوت Telegram ومعرّف المحادثة أولاً.');
     }
     final client = HttpClient()..connectionTimeout = timeout;
     try {
@@ -42,9 +40,10 @@ class TelegramNotifier {
         ),
       );
       final response = await request.close().timeout(timeout);
-      final body = await response.transform(utf8.decoder).join().timeout(
-        timeout,
-      );
+      final body = await response
+          .transform(utf8.decoder)
+          .join()
+          .timeout(timeout);
       if (response.statusCode != HttpStatus.ok) {
         throw SyncException('تعذّر إرسال رسالة Telegram: ${_reason(body)}');
       }

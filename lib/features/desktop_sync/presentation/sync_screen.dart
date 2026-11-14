@@ -14,9 +14,8 @@ class SyncScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider<SyncController>(
-      create: (context) => SyncController(
-        service: context.read<AppDependencies>().sync,
-      )..load(),
+      create: (context) =>
+          SyncController(service: context.read<AppDependencies>().sync)..load(),
       child: const _SyncView(),
     );
   }
@@ -153,7 +152,8 @@ class _SyncViewState extends State<_SyncView> {
                               textDirection: TextDirection.ltr,
                               decoration: const InputDecoration(
                                 labelText: 'رمز الربط',
-                                helperText: 'نفس الرمز الظاهر في برنامج الكمبيوتر',
+                                helperText:
+                                    'نفس الرمز الظاهر في برنامج الكمبيوتر',
                               ),
                             ),
                           ),
@@ -168,8 +168,8 @@ class _SyncViewState extends State<_SyncView> {
                                   ? null
                                   : () => runUiAction(
                                       context,
-                                      () => controller
-                                          .save(_collect(controller)),
+                                      () =>
+                                          controller.save(_collect(controller)),
                                       successMessage: 'تم حفظ الإعدادات',
                                     ),
                               icon: const Icon(Icons.save_outlined),
@@ -203,7 +203,9 @@ class _SyncViewState extends State<_SyncView> {
                 ListTile(
                   enabled: !busy,
                   leading: const Icon(Icons.cloud_upload_outlined),
-                  title: const Text('إرسال نسخة من قاعدة البيانات إلى الكمبيوتر'),
+                  title: const Text(
+                    'إرسال نسخة من قاعدة البيانات إلى الكمبيوتر',
+                  ),
                   subtitle: const Text(
                     'نسخة احتياطية كاملة (أصناف، زبائن، فواتير) تُحفظ على '
                     'الكمبيوتر.',
@@ -215,7 +217,9 @@ class _SyncViewState extends State<_SyncView> {
                 ListTile(
                   enabled: !busy,
                   leading: const Icon(Icons.cloud_download_outlined),
-                  title: const Text('سحب بيانات الكمبيوتر إلى الهاتف (Extract)'),
+                  title: const Text(
+                    'سحب بيانات الكمبيوتر إلى الهاتف (Extract)',
+                  ),
                   subtitle: const Text(
                     'يصبح الهاتف مطابقاً للكمبيوتر تماماً. تُحفظ نسخة من '
                     'بيانات الهاتف الحالية قبل الاستبدال.',
@@ -292,8 +296,8 @@ class _SyncViewState extends State<_SyncView> {
                                   ? null
                                   : () => runUiAction(
                                       context,
-                                      () => controller
-                                          .save(_collect(controller)),
+                                      () =>
+                                          controller.save(_collect(controller)),
                                       successMessage: 'تم حفظ الإعدادات',
                                     ),
                               icon: const Icon(Icons.save_outlined),
