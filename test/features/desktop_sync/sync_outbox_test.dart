@@ -73,7 +73,9 @@ void main() {
       expect(pending.first.isDone, isFalse);
       expect(pending.last.isDone, isTrue);
 
-      await outbox.save(<OutboxEntry>[pending.first.copyWith(desktopDone: true)]);
+      await outbox.save(<OutboxEntry>[
+        pending.first.copyWith(desktopDone: true),
+      ]);
       final after = await outbox.load();
       expect(after, hasLength(1));
       expect(after.single.isDone, isTrue);
