@@ -19,6 +19,7 @@ import 'package:bkdash_sanitary_ware/features/desktop_sync/data/desktop_sync_ser
 import 'package:bkdash_sanitary_ware/features/desktop_sync/data/sync_outbox.dart';
 import 'package:bkdash_sanitary_ware/features/desktop_sync/data/sync_settings_store.dart';
 import 'package:bkdash_sanitary_ware/features/inventory/data/item_repository.dart';
+import 'package:bkdash_sanitary_ware/features/invoices/data/invoice_pdf_service.dart';
 import 'package:bkdash_sanitary_ware/features/invoices/data/invoice_repository.dart';
 import 'package:bkdash_sanitary_ware/features/invoices/data/payment_repository.dart';
 import 'package:bkdash_sanitary_ware/features/reports/data/report_repository.dart';
@@ -49,6 +50,7 @@ final class AppDependencies {
     required this.biometrics,
     required this.backups,
     required this.snapshots,
+    required this.invoicePdf,
     required this.telegram,
     required this.telegramSettings,
     required this.sync,
@@ -67,6 +69,7 @@ final class AppDependencies {
     final SecretStore secrets = FlutterSecureSecretStore();
     final telegramSettings = TelegramSettingsStore(secrets, store);
     final telegram = TelegramService();
+    final invoicePdf = InvoicePdfService();
 
     final items = ItemRepository(database, changes);
     final customers = CustomerRepository(database, changes);
@@ -107,6 +110,7 @@ final class AppDependencies {
       biometrics: LocalAuthBiometricAuthenticator(),
       backups: backups,
       snapshots: snapshots,
+      invoicePdf: invoicePdf,
       telegram: telegram,
       telegramSettings: telegramSettings,
       sync: sync,
@@ -133,6 +137,7 @@ final class AppDependencies {
   final BiometricAuthenticator biometrics;
   final BackupService backups;
   final DbSnapshotService snapshots;
+  final InvoicePdfService invoicePdf;
   final TelegramService telegram;
   final TelegramSettingsStore telegramSettings;
   final DesktopSyncService sync;
