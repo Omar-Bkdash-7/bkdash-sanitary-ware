@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:bkdash_sanitary_ware/core/errors/app_exception.dart';
 import 'package:bkdash_sanitary_ware/core/events/data_change_notifier.dart';
 import 'package:bkdash_sanitary_ware/core/formatting/money.dart';
+import 'package:bkdash_sanitary_ware/features/backup/data/public_backup_service.dart';
 import 'package:bkdash_sanitary_ware/features/backup/models/backup_file.dart';
 import 'package:bkdash_sanitary_ware/features/backup/models/data_summary.dart';
 import 'package:bkdash_sanitary_ware/features/invoices/models/invoice.dart';
@@ -17,6 +18,7 @@ import 'package:bkdash_sanitary_ware/features/telegram/models/telegram_settings.
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 
+import '../../support/fake_public_backup_storage.dart';
 import '../../support/in_memory_key_value_store.dart';
 import '../../support/in_memory_secret_store.dart';
 
@@ -228,6 +230,7 @@ void main() {
 
   SyncCoordinator coordinator({
     Duration debounce = const Duration(seconds: 30),
+    PublicBackupService? publicBackups,
   }) => SyncCoordinator(
     queue: queue,
     settings: settings,
@@ -246,6 +249,7 @@ void main() {
     clock: () => now,
     snapshotDebounce: debounce,
     retryInterval: const Duration(hours: 1),
+    publicBackups: publicBackups,
   );
 
   /// Waits for a condition instead of guessing how long work takes.
@@ -361,6 +365,29 @@ void main() {
       sync.dispose();
     },
   );
+
+  test('the public copy is kept even when Telegram is off', () async {
+    final storage = FakePublicBackupStorage();
+    final publicBackups = PublicBackupService(
+      storage: storage,
+      preferences: preferences,
+    );
+    await publicBackups.setEnabled(true);
+    await settings.save(const TelegramSettings()); // no token, no chat id
+
+    final sync = coordinator(
+      debounce: const Duration(milliseconds: 40),
+      publicBackups: publicBackups,
+    );
+    unawaited(sync.start());
+    changes.reportWrite(DataWrite.customers);
+
+    await waitUntil(() => storage.names.isNotEmpty, reason: 'public copy');
+    expect(storage.names.single, endsWith('.db'));
+    expect(telegram.started, isEmpty);
+    expect(await queue.pendingCount(), 0);
+    sync.dispose();
+  });
 
   test('a failed upload stays pending with a growing delay', () async {
     final sync = coordinator();
