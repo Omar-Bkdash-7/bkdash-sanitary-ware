@@ -4,6 +4,7 @@ import 'package:bkdash_sanitary_ware/app/app_dependencies.dart';
 import 'package:bkdash_sanitary_ware/core/constants/app_strings.dart';
 import 'package:bkdash_sanitary_ware/core/formatting/app_dates.dart';
 import 'package:bkdash_sanitary_ware/core/widgets/app_feedback.dart';
+import 'package:bkdash_sanitary_ware/features/backup/data/public_backup_service.dart';
 import 'package:bkdash_sanitary_ware/features/backup/models/backup_file.dart';
 import 'package:bkdash_sanitary_ware/features/backup/models/restore_preview.dart';
 import 'package:bkdash_sanitary_ware/features/backup/presentation/data_tools_controller.dart';
@@ -24,6 +25,7 @@ class DataToolsScreen extends StatelessWidget {
           exports: deps.exports,
           picker: deps.picker,
           sharer: deps.sharer,
+          publicBackups: deps.publicBackups,
         )..load();
       },
       child: const _DataToolsView(),
@@ -88,6 +90,34 @@ class _DataToolsView extends StatelessWidget {
                     ),
                   ],
                 ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _Block(
+            title: 'نسخ تلقائية تبقى بعد حذف التطبيق',
+            children: [
+              SwitchListTile(
+                secondary: const Icon(Icons.folder_copy_outlined),
+                title: const Text('حفظ نسخة تلقائية في مجلد التنزيلات'),
+                subtitle: Text(
+                  controller.publicSupported
+                      ? 'يُحفظ آخر ${PublicBackupService.keepLast} نسخ في مجلد '
+                            '${PublicBackupService.folderPath} بعد كل تعديل. '
+                            'المحفوظ الآن: ${controller.publicCopies.length}'
+                      : 'غير متاح على هذا الإصدار من أندرويد '
+                            '(يتطلب أندرويد 10 أو أحدث).',
+                ),
+                value: controller.publicEnabled,
+                onChanged: controller.publicSupported && !busy
+                    ? (value) => runUiAction(
+                        context,
+                        () => controller.setPublicBackups(enabled: value),
+                        successMessage: value
+                            ? 'ستُحفظ نسخة في مجلد التنزيلات بعد كل تعديل'
+                            : 'أُوقف النسخ التلقائي في مجلد التنزيلات',
+                      )
+                    : null,
               ),
             ],
           ),

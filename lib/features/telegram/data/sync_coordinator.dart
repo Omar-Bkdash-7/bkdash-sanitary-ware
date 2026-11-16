@@ -5,6 +5,7 @@ import 'package:bkdash_sanitary_ware/core/errors/app_exception.dart';
 import 'package:bkdash_sanitary_ware/core/events/data_change_notifier.dart';
 import 'package:bkdash_sanitary_ware/core/services/clock.dart';
 import 'package:bkdash_sanitary_ware/core/storage/key_value_store.dart';
+import 'package:bkdash_sanitary_ware/features/backup/data/public_backup_service.dart';
 import 'package:bkdash_sanitary_ware/features/backup/models/backup_file.dart';
 import 'package:bkdash_sanitary_ware/features/backup/models/data_summary.dart';
 import 'package:bkdash_sanitary_ware/features/invoices/models/invoice.dart';
@@ -53,9 +54,11 @@ class SyncCoordinator {
     required DatabaseSnapshotBuilder buildSnapshot,
     required DatabaseSummaryLoader loadSummary,
     required Clock clock,
+    PublicBackupService? publicBackups,
     this.snapshotDebounce = defaultSnapshotDebounce,
     this.retryInterval = defaultRetryInterval,
-  }) : _queue = queue,
+  }) : _publicBackups = publicBackups,
+       _queue = queue,
        _settings = settings,
        _telegram = telegram,
        _preferences = preferences,
@@ -84,6 +87,8 @@ class SyncCoordinator {
   final DatabaseSnapshotBuilder _buildSnapshot;
   final DatabaseSummaryLoader _loadSummary;
   final Clock _clock;
+
+  final PublicBackupService? _publicBackups;
 
   final Duration snapshotDebounce;
   final Duration retryInterval;
@@ -221,10 +226,22 @@ class SyncCoordinator {
     unawaited(flush());
   }
 
+  /// `true` while the public rolling copy also wants a fresh snapshot.
+  Future<bool> _publicEnabled() async {
+    final service = _publicBackups;
+    if (service == null) return false;
+    try {
+      return await service.isEnabled();
+    } catch (_) {
+      return false;
+    }
+  }
+
   /// Restarts the debounce window; one snapshot follows the last change.
   Future<void> _scheduleSnapshot() async {
     final settings = await _settings.load();
-    if (!settings.isConfigured || !settings.sendDatabase) return;
+    final toTelegram = settings.isConfigured && settings.sendDatabase;
+    if (!toTelegram && !await _publicEnabled()) return;
     await _preferences.setBool(dirtyKey, true);
     _debounce?.cancel();
     _debounce = Timer(snapshotDebounce, () => unawaited(_enqueueSnapshot()));
@@ -232,26 +249,47 @@ class SyncCoordinator {
 
   Future<void> _enqueueSnapshot() async {
     try {
-      // Only the newest snapshot is worth sending: drop the older ones.
-      for (final job in await _queue.pendingOfKind(SyncJobKind.database)) {
-        await _queue.remove(job.id);
-        await _deleteFile(job.filePath);
+      final settings = await _settings.load();
+      final toTelegram = settings.isConfigured && settings.sendDatabase;
+      final toPublic = await _publicEnabled();
+      if (!toTelegram && !toPublic) {
+        // Both destinations were switched off while the window was open.
+        await _preferences.setBool(dirtyKey, false);
+        return;
+      }
+      if (toTelegram) {
+        // Only the newest snapshot is worth sending: drop the older ones.
+        for (final job in await _queue.pendingOfKind(SyncJobKind.database)) {
+          await _queue.remove(job.id);
+          await _deleteFile(job.filePath);
+        }
       }
       final snapshot = await _buildSnapshot();
-      final summary = await _loadSummary();
-      await _queue.add(
-        kind: SyncJobKind.database,
-        createdAt: _clock(),
-        filePath: snapshot.file.path,
-        caption: BackupCaption.database(
-          sentAt: _clock(),
-          summary: summary,
-          fileName: snapshot.name,
-        ),
-      );
+      if (toPublic) {
+        try {
+          await _publicBackups!.keep(snapshot.file, fileName: snapshot.name);
+        } catch (_) {
+          // The public copy is a bonus; Telegram still gets its own upload.
+        }
+      }
+      if (toTelegram) {
+        final summary = await _loadSummary();
+        await _queue.add(
+          kind: SyncJobKind.database,
+          createdAt: _clock(),
+          filePath: snapshot.file.path,
+          caption: BackupCaption.database(
+            sentAt: _clock(),
+            summary: summary,
+            fileName: snapshot.name,
+          ),
+        );
+      } else {
+        await _deleteFile(snapshot.file.path);
+      }
       await _preferences.setBool(dirtyKey, false);
       await _refreshPending();
-      unawaited(flush());
+      if (toTelegram) unawaited(flush());
     } catch (_) {
       // The dirty flag stays set, so the snapshot is tried again later.
     }

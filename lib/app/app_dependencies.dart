@@ -14,6 +14,8 @@ import 'package:bkdash_sanitary_ware/features/backup/data/backup_service.dart';
 import 'package:bkdash_sanitary_ware/features/backup/data/db_snapshot_service.dart';
 import 'package:bkdash_sanitary_ware/features/backup/data/export_service.dart';
 import 'package:bkdash_sanitary_ware/features/backup/data/file_selector_backup_picker.dart';
+import 'package:bkdash_sanitary_ware/features/backup/data/public_backup_service.dart';
+import 'package:bkdash_sanitary_ware/features/backup/data/public_backup_storage.dart';
 import 'package:bkdash_sanitary_ware/features/customers/data/customer_repository.dart';
 import 'package:bkdash_sanitary_ware/features/desktop_sync/data/desktop_sync_service.dart';
 import 'package:bkdash_sanitary_ware/features/desktop_sync/data/sync_outbox.dart';
@@ -52,6 +54,7 @@ final class AppDependencies {
     required this.biometrics,
     required this.backups,
     required this.snapshots,
+    required this.publicBackups,
     required this.invoicePdf,
     required this.syncQueue,
     required this.syncCoordinator,
@@ -99,6 +102,11 @@ final class AppDependencies {
     );
     unawaited(sync.start());
 
+    final publicBackups = PublicBackupService(
+      storage: const MediaStorePublicBackupStorage(),
+      preferences: store,
+    );
+
     final syncQueue = await SqfliteSyncQueueStore.open();
     final syncCoordinator = SyncCoordinator(
       queue: syncQueue,
@@ -117,6 +125,7 @@ final class AppDependencies {
       buildSnapshot: snapshots.create,
       loadSummary: backups.summarize,
       clock: DateTime.now,
+      publicBackups: publicBackups,
     );
     unawaited(syncCoordinator.start());
 
@@ -133,6 +142,7 @@ final class AppDependencies {
       biometrics: LocalAuthBiometricAuthenticator(),
       backups: backups,
       snapshots: snapshots,
+      publicBackups: publicBackups,
       invoicePdf: invoicePdf,
       syncQueue: syncQueue,
       syncCoordinator: syncCoordinator,
@@ -162,6 +172,7 @@ final class AppDependencies {
   final BiometricAuthenticator biometrics;
   final BackupService backups;
   final DbSnapshotService snapshots;
+  final PublicBackupService publicBackups;
   final InvoicePdfService invoicePdf;
   final SyncQueueStore syncQueue;
   final SyncCoordinator syncCoordinator;
