@@ -6,6 +6,7 @@ import 'package:bkdash_sanitary_ware/features/backup/data/backup_file_picker.dar
 import 'package:bkdash_sanitary_ware/features/backup/data/backup_service.dart';
 import 'package:bkdash_sanitary_ware/features/backup/data/export_service.dart';
 import 'package:bkdash_sanitary_ware/features/backup/models/backup_file.dart';
+import 'package:bkdash_sanitary_ware/features/backup/models/restore_preview.dart';
 
 /// The CSV files the user can export.
 enum ExportKind {
@@ -70,6 +71,13 @@ class DataToolsController extends BaseController {
 
   /// Asks the user to choose a file; `null` when he cancelled.
   Future<File?> pickBackupFile() => _guard(_picker.pickBackup);
+
+  /// Counts of the current data and of [source], for the confirmation dialog.
+  Future<RestorePreview> previewRestore(File source) => _guard(() async {
+    final current = await _backups.summarize();
+    final incoming = await _backups.summarizeIncoming(source);
+    return RestorePreview(current: current, incoming: incoming);
+  });
 
   Future<void> restore(File source) => _guard(() async {
     await _backups.restore(source);

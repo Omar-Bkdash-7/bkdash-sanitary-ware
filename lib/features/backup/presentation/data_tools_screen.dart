@@ -5,6 +5,7 @@ import 'package:bkdash_sanitary_ware/core/constants/app_strings.dart';
 import 'package:bkdash_sanitary_ware/core/formatting/app_dates.dart';
 import 'package:bkdash_sanitary_ware/core/widgets/app_feedback.dart';
 import 'package:bkdash_sanitary_ware/features/backup/models/backup_file.dart';
+import 'package:bkdash_sanitary_ware/features/backup/models/restore_preview.dart';
 import 'package:bkdash_sanitary_ware/features/backup/presentation/data_tools_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -186,26 +187,89 @@ class _DataToolsView extends StatelessWidget {
     await _confirmRestore(context, controller, file);
   }
 
+  /// Checks the file, then shows what replaces what before anything changes.
   Future<void> _confirmRestore(
     BuildContext context,
     DataToolsController controller,
     File file,
   ) async {
-    final confirmed = await showConfirmDialog(
-      context,
-      title: 'استعادة نسخة احتياطية',
-      message:
-          'ستُستبدل كل البيانات الحالية (المخزون والفواتير والزبائن) ببيانات '
-          'النسخة المحددة. هل تريد المتابعة؟',
-      confirmLabel: 'استعادة',
-      destructive: true,
-    );
+    RestorePreview? preview;
+    final checked = await runUiAction(context, () async {
+      preview = await controller.previewRestore(file);
+    });
+    final ready = preview;
+    if (!checked || ready == null || !context.mounted) return;
+    final confirmed = await _showRestoreDialog(context, ready);
     if (!confirmed || !context.mounted) return;
     await runUiAction(
       context,
       () => controller.restore(file),
       successMessage: 'تمت استعادة البيانات بنجاح',
     );
+  }
+
+  /// The overwrite warning, with the counts of the current and the incoming
+  /// data so the choice is made on facts, not on a guess.
+  Future<bool> _showRestoreDialog(
+    BuildContext context,
+    RestorePreview preview,
+  ) async {
+    final scheme = Theme.of(context).colorScheme;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('استعادة نسخة احتياطية'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('ستُستبدل كل البيانات الحالية (المخزون والزبائن '
+                  'والفواتير) ببيانات النسخة المحددة:'),
+              const SizedBox(height: 14),
+              _CountRow(
+                label: 'الفواتير',
+                current: preview.current.invoices,
+                incoming: preview.incoming.invoices,
+              ),
+              _CountRow(
+                label: 'الزبائن',
+                current: preview.current.customers,
+                incoming: preview.incoming.customers,
+              ),
+              _CountRow(
+                label: 'الأصناف',
+                current: preview.current.products,
+                incoming: preview.incoming.products,
+              ),
+              const SizedBox(height: 14),
+              Text(
+                'تُحفظ نسخة من بياناتك الحالية تلقائياً قبل الاستبدال، '
+                'فتستطيع الرجوع إليها من «النسخ المحفوظة على الهاتف».',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: scheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text(AppStrings.cancel),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: scheme.error,
+              foregroundColor: scheme.onError,
+            ),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('استعادة واستبدال'),
+          ),
+        ],
+      ),
+    );
+    return confirmed ?? false;
   }
 
   Future<void> _delete(
@@ -222,6 +286,51 @@ class _DataToolsView extends StatelessWidget {
     );
     if (!confirmed || !context.mounted) return;
     await runUiAction(context, () => controller.delete(backup));
+  }
+}
+
+/// "الفواتير: الحالي 12 ← النسخة 9".
+class _CountRow extends StatelessWidget {
+  const _CountRow({
+    required this.label,
+    required this.current,
+    required this.incoming,
+  });
+
+  final String label;
+  final int current;
+  final int incoming;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final changed = current != incoming;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 72,
+            child: Text(
+              label,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              '$current  ←  $incoming',
+              textDirection: TextDirection.ltr,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                fontWeight: changed ? FontWeight.bold : null,
+                color: changed ? theme.colorScheme.error : null,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
