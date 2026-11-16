@@ -101,6 +101,7 @@ class InvoiceRepository {
     });
 
     _changes.markChanged();
+    _changes.reportWrite(DataWrite.invoice, invoiceId: invoiceId);
     return invoiceId;
   }
 
@@ -168,6 +169,7 @@ class InvoiceRepository {
     });
 
     _changes.markChanged();
+    _changes.reportWrite(DataWrite.invoiceUpdated, invoiceId: id);
   }
 
   /// Deletes the invoice [id] as if it had never been issued.
@@ -205,6 +207,7 @@ class InvoiceRepository {
     });
 
     _changes.markChanged();
+    _changes.reportWrite(DataWrite.invoiceDeleted, invoiceId: id);
   }
 
   /// Gives the pieces of the saved invoice [id] back to the stock.

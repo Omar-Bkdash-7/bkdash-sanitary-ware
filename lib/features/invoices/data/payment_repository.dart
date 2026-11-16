@@ -72,6 +72,7 @@ class PaymentRepository {
     });
 
     _changes.markChanged();
+    _changes.reportWrite(DataWrite.payment);
   }
 
   /// Payments received from [customerId], newest first.
