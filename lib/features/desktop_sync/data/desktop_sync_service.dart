@@ -10,7 +10,6 @@ import 'package:bkdash_sanitary_ware/features/backup/models/backup_file.dart';
 import 'package:bkdash_sanitary_ware/features/desktop_sync/data/desktop_bridge_client.dart';
 import 'package:bkdash_sanitary_ware/features/desktop_sync/data/sync_outbox.dart';
 import 'package:bkdash_sanitary_ware/features/desktop_sync/data/sync_settings_store.dart';
-import 'package:bkdash_sanitary_ware/features/desktop_sync/data/telegram_notifier.dart';
 import 'package:bkdash_sanitary_ware/features/desktop_sync/models/invoice_sync_payload.dart';
 import 'package:bkdash_sanitary_ware/features/desktop_sync/models/sync_settings.dart';
 import 'package:bkdash_sanitary_ware/features/invoices/data/invoice_repository.dart';
@@ -31,7 +30,6 @@ class DesktopSyncService {
     required AppDatabase database,
     required Future<Directory> Function() backupsDirectory,
     DesktopBridgeClient? bridge,
-    TelegramNotifier? telegram,
     Clock? clock,
   }) : _settingsStore = settingsStore,
        _invoices = invoices,
@@ -40,7 +38,6 @@ class DesktopSyncService {
        _database = database,
        _backupsDirectory = backupsDirectory,
        _bridge = bridge ?? DesktopBridgeClient(),
-       _telegram = telegram ?? TelegramNotifier(),
        _clock = clock ?? DateTime.now;
 
   final SyncSettingsStore _settingsStore;
@@ -50,7 +47,6 @@ class DesktopSyncService {
   final AppDatabase _database;
   final Future<Directory> Function() _backupsDirectory;
   final DesktopBridgeClient _bridge;
-  final TelegramNotifier _telegram;
   final Clock _clock;
 
   Timer? _timer;
@@ -108,19 +104,9 @@ class DesktopSyncService {
         final details = await _invoices.getDetails(entry.invoiceId);
         if (details == null) continue; // The invoice no longer exists.
 
-        var telegramDone = entry.telegramDone || !settings.hasTelegram;
-        if (!telegramDone) {
-          try {
-            await _telegram.send(
-              botToken: settings.telegramToken,
-              chatId: settings.telegramChatId,
-              text: InvoiceSyncPayload.telegramMessage(details: details),
-            );
-            telegramDone = true;
-          } on SyncException {
-            telegramDone = false;
-          }
-        }
+        // Telegram is handled by the SyncCoordinator (PDF + database snapshot),
+        // so this queue only tracks the computer from now on.
+        const telegramDone = true;
 
         var desktopDone = entry.desktopDone || !settings.hasDesktop;
         if (!desktopDone) {
@@ -152,23 +138,6 @@ class DesktopSyncService {
     } finally {
       _flushing = false;
     }
-  }
-
-  /// Sends a message to Telegram to prove the bot is configured correctly.
-  Future<void> sendTelegramTest() async {
-    final settings = await _settingsStore.load();
-    if (!settings.hasTelegram) {
-      throw const SyncException(
-        'فعّل Telegram وأدخل رمز البوت ومعرّف المحادثة أولاً.',
-      );
-    }
-    await _telegram.send(
-      botToken: settings.telegramToken,
-      chatId: settings.telegramChatId,
-      text:
-          '✅ تم ربط تطبيق بكداش بالـ Telegram بنجاح.\n'
-          'ستصل هنا فاتورة كل عملية بيع.',
-    );
   }
 
   Future<BridgeInfo> ping() async {

@@ -48,6 +48,7 @@ class ItemRepository {
         'created_at': AppDates.isoDateTime(_clock()),
       });
       _changes.markChanged();
+      _changes.reportWrite(DataWrite.inventory);
       return (await findById(id))!;
     } on DatabaseException catch (error) {
       if (error.isUniqueConstraintError()) throw DuplicateSkuException(sku);
@@ -74,6 +75,7 @@ class ItemRepository {
       rethrow;
     }
     _changes.markChanged();
+    _changes.reportWrite(DataWrite.inventory);
     return (await findById(id))!;
   }
 
@@ -86,6 +88,7 @@ class ItemRepository {
       whereArgs: <Object?>[id],
     );
     _changes.markChanged();
+    _changes.reportWrite(DataWrite.inventory);
   }
 
   Map<String, Object?> _toRow(ItemInput input) => <String, Object?>{

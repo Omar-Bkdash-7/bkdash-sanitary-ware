@@ -6,6 +6,7 @@ import 'package:bkdash_sanitary_ware/core/events/data_change_notifier.dart';
 import 'package:bkdash_sanitary_ware/core/formatting/app_dates.dart';
 import 'package:bkdash_sanitary_ware/core/services/clock.dart';
 import 'package:bkdash_sanitary_ware/features/backup/models/backup_file.dart';
+import 'package:bkdash_sanitary_ware/features/backup/models/data_summary.dart';
 import 'package:path/path.dart' as p;
 
 /// Creates, lists and restores copies of the whole database.
@@ -59,6 +60,18 @@ class BackupService {
 
   Future<void> deleteBackup(BackupFile backup) async {
     if (backup.file.existsSync()) await backup.file.delete();
+  }
+
+  /// Counts of the data now on the phone.
+  Future<DataSummary> summarize() => _database.summarize();
+
+  /// Counts inside [source], after checking that it is a usable backup.
+  ///
+  /// Throws [BackupException] for a file that is not this app's data, so the
+  /// confirmation dialog is shown only for a file that can really be restored.
+  Future<DataSummary> summarizeIncoming(File source) async {
+    await _database.validateBackup(source);
+    return _database.summarizeFile(source);
   }
 
   /// Replaces the current data with the content of [source].

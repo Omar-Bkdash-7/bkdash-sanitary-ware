@@ -7,6 +7,7 @@ import 'package:bkdash_sanitary_ware/features/security/presentation/change_pin_d
 import 'package:bkdash_sanitary_ware/features/security/presentation/security_controller.dart';
 import 'package:bkdash_sanitary_ware/features/settings/models/app_theme_mode.dart';
 import 'package:bkdash_sanitary_ware/features/settings/presentation/settings_controller.dart';
+import 'package:bkdash_sanitary_ware/features/telegram/presentation/telegram_settings_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -104,12 +105,25 @@ class SettingsScreen extends StatelessWidget {
               leading: const Icon(Icons.sync_alt_rounded),
               title: const Text('الربط مع الكمبيوتر و Telegram'),
               subtitle: const Text(
-                'إرسال الفواتير تلقائياً، نسخة احتياطية على الكمبيوتر، '
-                'وسحب بياناته إلى الهاتف',
+                'إرسال الفواتير إلى برنامج الكمبيوتر على نفس شبكة الواي فاي',
               ),
               trailing: const Icon(Icons.chevron_left_rounded),
               onTap: () => Navigator.of(context).push(
                 MaterialPageRoute<void>(builder: (_) => const SyncScreen()),
+              ),
+            ),
+            const Divider(height: 1),
+            ListTile(
+              leading: const Icon(Icons.send_rounded),
+              title: const Text('إعدادات تيليجرام'),
+              subtitle: const Text(
+                'إرسال الفاتورة PDF ونسخة قاعدة البيانات إلى محادثتك الخاصة',
+              ),
+              trailing: const Icon(Icons.chevron_left_rounded),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => const TelegramSettingsScreen(),
+                ),
               ),
             ),
           ],

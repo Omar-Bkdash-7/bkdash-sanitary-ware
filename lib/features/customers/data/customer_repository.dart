@@ -50,6 +50,7 @@ ORDER BY (IFNULL(SUM(i.total_cents), 0) - IFNULL(SUM(i.paid_cents), 0)) DESC,
       'created_at': AppDates.isoDateTime(_clock()),
     });
     _changes.markChanged();
+    _changes.reportWrite(DataWrite.customers);
     return Customer(
       id: id,
       name: input.name.trim(),
@@ -70,24 +71,43 @@ ORDER BY (IFNULL(SUM(i.total_cents), 0) - IFNULL(SUM(i.paid_cents), 0)) DESC,
     if (changed == 0) throw const NotFoundException('الزبون غير موجود.');
     // Old invoices keep the name they were issued with; only new ones use it.
     _changes.markChanged();
+    _changes.reportWrite(DataWrite.customers);
   }
 
   /// A customer who has invoices can not be deleted (it would erase the history
   /// of his debts).
+  ///
+  /// The check and the delete run in one transaction: an invoice saved from
+  /// another screen can never slip in between them.
   Future<void> delete(int id) async {
-    final summary = await getSummary(id);
-    if (summary == null) throw const NotFoundException('الزبون غير موجود.');
-    if (summary.invoiceCount > 0) {
-      throw const ConflictException(
-        'لا يمكن حذف زبون لديه فواتير مسجّلة، لأن ذلك يُفقد سجلّ ديونه.',
+    await _database.db.transaction((txn) async {
+      final existing = await txn.query(
+        DbTables.customers,
+        columns: <String>['id'],
+        where: 'id = ?',
+        whereArgs: <Object?>[id],
+        limit: 1,
       );
-    }
-    await _database.db.delete(
-      DbTables.customers,
-      where: 'id = ?',
-      whereArgs: <Object?>[id],
-    );
+      if (existing.isEmpty) throw const NotFoundException('الزبون غير موجود.');
+      final invoices = await txn.rawQuery(
+        'SELECT COUNT(*) AS count FROM ${DbTables.invoices} '
+        'WHERE customer_id = ?',
+        <Object?>[id],
+      );
+      final invoiceCount = (invoices.first['count'] as int?) ?? 0;
+      if (invoiceCount > 0) {
+        throw const ConflictException(
+          'لا يمكن حذف زبون لديه فواتير مسجّلة، لأن ذلك يُفقد سجلّ ديونه.',
+        );
+      }
+      await txn.delete(
+        DbTables.customers,
+        where: 'id = ?',
+        whereArgs: <Object?>[id],
+      );
+    });
     _changes.markChanged();
+    _changes.reportWrite(DataWrite.customers);
   }
 
   Map<String, Object?> _toRow(CustomerInput input) => <String, Object?>{
