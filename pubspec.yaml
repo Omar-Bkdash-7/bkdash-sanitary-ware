@@ -33,6 +33,8 @@ dependencies:
 
   # Reports
   fl_chart: ^1.3.0
+  flutter_secure_storage: ^11.2.0
+  pdf: ^3.13.1
 
 dev_dependencies:
   flutter_test:
@@ -44,6 +46,9 @@ flutter:
   
   assets:
     - assets/images/bkdash_icon.png
+    # Arabic invoice PDF (Amiri, SIL OFL - see assets/fonts/Amiri-OFL.txt).
+    - assets/fonts/Amiri-Regular.ttf
+    - assets/fonts/Amiri-Bold.ttf
 
 # App Icon Configuration
 flutter_launcher_icons:

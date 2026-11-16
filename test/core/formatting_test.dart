@@ -27,6 +27,8 @@ void main() {
       expect(AppDates.weekday(date), 'الاثنين');
       expect(AppDates.monthYear(date), 'تشرين الثاني 2026');
       expect(AppDates.fileStamp(date), '20261102_153005');
+      expect(AppDates.fileClock(date), '15-30');
+      expect(AppDates.fileClock(DateTime(2026, 1, 5, 9, 7)), '09-07');
     });
 
     test('dateOnly drops the time of day', () {

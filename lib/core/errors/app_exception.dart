@@ -57,3 +57,11 @@ final class BackupException extends AppException {
 final class SyncException extends AppException {
   const SyncException(super.message);
 }
+
+/// Telegram refused the request (bad token, unknown chat, rate limit, ...).
+final class TelegramException extends AppException {
+  const TelegramException(super.message, {this.retryAfter});
+
+  /// For a `429` answer: how long Telegram asked us to wait.
+  final Duration? retryAfter;
+}

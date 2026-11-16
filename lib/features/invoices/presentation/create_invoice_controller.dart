@@ -19,6 +19,7 @@ class CreateInvoiceController extends BaseController {
     required CustomerRepository customers,
     required InvoiceRepository invoices,
     DesktopSyncService? sync,
+    this.invoiceId,
   }) : _items = items,
        _customers = customers,
        _invoices = invoices,
@@ -30,6 +31,11 @@ class CreateInvoiceController extends BaseController {
 
   /// Sends the saved invoice to Telegram and to the computer.
   final DesktopSyncService? _sync;
+
+  /// The invoice being rewritten; `null` while a new one is written.
+  final int? invoiceId;
+
+  bool get isEditing => invoiceId != null;
 
   InvoiceDraft _draft = const InvoiceDraft();
   List<Item> _catalog = const <Item>[];
@@ -48,7 +54,63 @@ class CreateInvoiceController extends BaseController {
     final summaries = await _customers.getAllWithSummary();
     _customerList = summaries.map((summary) => summary.customer).toList()
       ..sort((a, b) => a.name.compareTo(b.name));
+    final id = invoiceId;
+    if (id != null) _draft = await _draftFromSaved(id);
   });
+
+  /// Rebuilds the draft of an invoice that was already issued.
+  ///
+  /// The lines are matched to the catalog by their SKU, because an invoice line
+  /// keeps its own copy of the name and the prices. A product that left the
+  /// inventory makes the invoice un-editable: its pieces could not be given
+  /// back to the right row.
+  Future<InvoiceDraft> _draftFromSaved(int id) async {
+    final details = await _invoices.getDetails(id);
+    if (details == null) throw const NotFoundException('الفاتورة غير موجودة.');
+    final bySku = <String, Item>{for (final item in _catalog) item.sku: item};
+    final lines = <InvoiceLine>[];
+    for (final line in details.lines) {
+      final item = bySku[line.sku];
+      if (item == null) {
+        throw const ValidationException(
+          'أحد أصناف هذه الفاتورة لم يعد في المخزون، فلا يمكن تعديلها. '
+          'احذف الفاتورة وأصدر واحدة جديدة.',
+        );
+      }
+      lines.add(
+        InvoiceLine(
+          itemId: item.id,
+          itemName: line.itemName,
+          category: line.category,
+          sku: line.sku,
+          unit: line.unit,
+          quantity: line.quantity,
+          unitCost: line.unitCost,
+          unitPrice: line.unitPrice,
+          // The pieces of this invoice come back before the new ones are taken.
+          available: item.quantity + line.quantity,
+        ),
+      );
+    }
+    final invoice = details.invoice;
+    final customerId = invoice.customerId;
+    Customer? customer;
+    if (customerId != null) {
+      for (final candidate in _customerList) {
+        if (candidate.id == customerId) {
+          customer = candidate;
+          break;
+        }
+      }
+    }
+    return InvoiceDraft(
+      customer: customer,
+      paymentMethod: invoice.paymentMethod,
+      lines: lines,
+      partialPaid: invoice.paid,
+      notes: invoice.notes,
+    );
+  }
 
   /// Registers a new customer and selects him for this invoice.
   Future<void> addCustomer(CustomerInput input) async {
@@ -121,11 +183,16 @@ class CreateInvoiceController extends BaseController {
     notifyListeners();
   }
 
-  /// Saves the invoice and returns its number.
+  /// Saves the invoice and returns its number (creating or updating it).
   Future<int> save() async {
     _saving = true;
     notifyListeners();
     try {
+      final editing = invoiceId;
+      if (editing != null) {
+        await _invoices.update(editing, _draft);
+        return editing;
+      }
       final id = await _invoices.create(_draft);
       // The delivery runs on its own: a slow network never blocks the sale.
       final sync = _sync;

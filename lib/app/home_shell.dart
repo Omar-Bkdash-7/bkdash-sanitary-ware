@@ -11,6 +11,7 @@ import 'package:bkdash_sanitary_ware/features/reports/presentation/reports_contr
 import 'package:bkdash_sanitary_ware/features/reports/presentation/reports_screen.dart';
 import 'package:bkdash_sanitary_ware/features/security/presentation/security_controller.dart';
 import 'package:bkdash_sanitary_ware/features/settings/presentation/settings_screen.dart';
+import 'package:bkdash_sanitary_ware/features/telegram/presentation/sync_log_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -88,6 +89,25 @@ class _HomeScaffoldState extends State<_HomeScaffold> {
       appBar: AppBar(
         title: BkdashLogo(size: 34, isDark: isDark),
         actions: [
+          ValueListenableBuilder<int>(
+            valueListenable: context
+                .read<AppDependencies>()
+                .syncCoordinator
+                .pending,
+            builder: (context, pending, _) => IconButton(
+              tooltip: pending == 0
+                  ? 'سجل الإرسال'
+                  : '$pending بانتظار الإرسال إلى تيليجرام',
+              icon: Icon(
+                pending == 0
+                    ? Icons.cloud_done_outlined
+                    : Icons.cloud_sync_outlined,
+              ),
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(builder: (_) => const SyncLogScreen()),
+              ),
+            ),
+          ),
           IconButton(
             tooltip: AppStrings.lockNow,
             icon: const Icon(Icons.lock_outline_rounded),
