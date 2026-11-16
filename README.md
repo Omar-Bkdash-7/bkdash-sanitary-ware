@@ -131,15 +131,15 @@ Data flow, and the two hooks every write goes through:
 
 ```mermaid
 flowchart LR
-  screen[Screen] --> controller["Controller<br/>ChangeNotifier"]
+  screen[Screen] --> controller[Controller ChangeNotifier]
   controller --> repo[Repository]
   repo --> db[(SQLite)]
-  repo -- "markChanged()" --> events[DataChangeNotifier]
-  events --> screens["Open screens reload"]
-  events -- "reportWrite()" --> sync[SyncCoordinator]
+  repo -- markChanged --> events[DataChangeNotifier]
+  events --> screens[Open screens reload]
+  events -- reportWrite --> sync[SyncCoordinator]
   sync --> outbox[(Outbox DB)]
   sync --> telegram[Telegram]
-  sync --> public["Downloads/BKDash_Backups"]
+  sync --> public[Downloads/BKDash_Backups]
 ```
 
 Money is never a `double`: `Money` stores integer cents, so totals and debts cannot drift.
