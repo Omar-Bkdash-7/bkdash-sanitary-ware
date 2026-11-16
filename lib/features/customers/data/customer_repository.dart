@@ -50,6 +50,7 @@ ORDER BY (IFNULL(SUM(i.total_cents), 0) - IFNULL(SUM(i.paid_cents), 0)) DESC,
       'created_at': AppDates.isoDateTime(_clock()),
     });
     _changes.markChanged();
+    _changes.reportWrite(DataWrite.customers);
     return Customer(
       id: id,
       name: input.name.trim(),
@@ -70,6 +71,7 @@ ORDER BY (IFNULL(SUM(i.total_cents), 0) - IFNULL(SUM(i.paid_cents), 0)) DESC,
     if (changed == 0) throw const NotFoundException('الزبون غير موجود.');
     // Old invoices keep the name they were issued with; only new ones use it.
     _changes.markChanged();
+    _changes.reportWrite(DataWrite.customers);
   }
 
   /// A customer who has invoices can not be deleted (it would erase the history
@@ -105,6 +107,7 @@ ORDER BY (IFNULL(SUM(i.total_cents), 0) - IFNULL(SUM(i.paid_cents), 0)) DESC,
       );
     });
     _changes.markChanged();
+    _changes.reportWrite(DataWrite.customers);
   }
 
   Map<String, Object?> _toRow(CustomerInput input) => <String, Object?>{

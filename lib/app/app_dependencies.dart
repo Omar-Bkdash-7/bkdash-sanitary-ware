@@ -27,6 +27,8 @@ import 'package:bkdash_sanitary_ware/features/security/data/biometric_authentica
 import 'package:bkdash_sanitary_ware/features/security/data/local_auth_biometric_authenticator.dart';
 import 'package:bkdash_sanitary_ware/features/security/data/security_repository.dart';
 import 'package:bkdash_sanitary_ware/features/settings/data/settings_repository.dart';
+import 'package:bkdash_sanitary_ware/features/telegram/data/sync_coordinator.dart';
+import 'package:bkdash_sanitary_ware/features/telegram/data/sync_queue_store.dart';
 import 'package:bkdash_sanitary_ware/features/telegram/data/telegram_service.dart';
 import 'package:bkdash_sanitary_ware/features/telegram/data/telegram_settings_store.dart';
 import 'package:path/path.dart' as p;
@@ -51,6 +53,8 @@ final class AppDependencies {
     required this.backups,
     required this.snapshots,
     required this.invoicePdf,
+    required this.syncQueue,
+    required this.syncCoordinator,
     required this.telegram,
     required this.telegramSettings,
     required this.sync,
@@ -87,8 +91,6 @@ final class AppDependencies {
     );
     final sync = DesktopSyncService(
       settingsStore: SyncSettingsStore(store, telegram: telegramSettings),
-      telegram: telegram,
-      telegramSettings: telegramSettings,
       invoices: invoices,
       backups: backups,
       outbox: SyncOutbox(store),
@@ -96,6 +98,27 @@ final class AppDependencies {
       backupsDirectory: _backupsDirectory,
     );
     unawaited(sync.start());
+
+    final syncQueue = await SqfliteSyncQueueStore.open();
+    final syncCoordinator = SyncCoordinator(
+      queue: syncQueue,
+      settings: telegramSettings,
+      telegram: telegram,
+      preferences: store,
+      changes: changes,
+      loadInvoice: invoices.getDetails,
+      buildPdf: (details) async {
+        final previous = await invoices.previousDebt(
+          invoiceId: details.invoice.id,
+          customerId: details.invoice.customerId,
+        );
+        return invoicePdf.create(details: details, previousDebt: previous);
+      },
+      buildSnapshot: snapshots.create,
+      loadSummary: backups.summarize,
+      clock: DateTime.now,
+    );
+    unawaited(syncCoordinator.start());
 
     return AppDependencies._(
       database: database,
@@ -111,6 +134,8 @@ final class AppDependencies {
       backups: backups,
       snapshots: snapshots,
       invoicePdf: invoicePdf,
+      syncQueue: syncQueue,
+      syncCoordinator: syncCoordinator,
       telegram: telegram,
       telegramSettings: telegramSettings,
       sync: sync,
@@ -138,6 +163,8 @@ final class AppDependencies {
   final BackupService backups;
   final DbSnapshotService snapshots;
   final InvoicePdfService invoicePdf;
+  final SyncQueueStore syncQueue;
+  final SyncCoordinator syncCoordinator;
   final TelegramService telegram;
   final TelegramSettingsStore telegramSettings;
   final DesktopSyncService sync;
