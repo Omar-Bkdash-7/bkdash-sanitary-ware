@@ -8,6 +8,7 @@ import 'package:bkdash_sanitary_ware/core/widgets/empty_state.dart';
 import 'package:bkdash_sanitary_ware/core/widgets/load_state_view.dart';
 import 'package:bkdash_sanitary_ware/core/widgets/money_text.dart';
 import 'package:bkdash_sanitary_ware/features/invoices/models/invoice.dart';
+import 'package:bkdash_sanitary_ware/features/invoices/models/invoice_caption.dart';
 import 'package:bkdash_sanitary_ware/features/invoices/presentation/create_invoice_screen.dart';
 import 'package:bkdash_sanitary_ware/features/invoices/presentation/invoice_details_controller.dart';
 import 'package:flutter/material.dart';
@@ -56,6 +57,8 @@ class _InvoiceActions extends StatelessWidget {
     return PopupMenuButton<String>(
       onSelected: (value) {
         switch (value) {
+          case 'pdf':
+            _sharePdf(context, controller);
           case 'edit':
             _edit(context);
           case 'delete':
@@ -63,6 +66,7 @@ class _InvoiceActions extends StatelessWidget {
         }
       },
       itemBuilder: (context) => [
+        const PopupMenuItem(value: 'pdf', child: Text('مشاركة الفاتورة PDF')),
         const PopupMenuItem(value: 'edit', child: Text('تعديل الفاتورة')),
         PopupMenuItem(
           value: 'delete',
@@ -73,6 +77,32 @@ class _InvoiceActions extends StatelessWidget {
         ),
       ],
     );
+  }
+
+  /// Builds the PDF of this invoice and opens the share sheet.
+  Future<void> _sharePdf(
+    BuildContext context,
+    InvoiceDetailsController controller,
+  ) async {
+    final deps = context.read<AppDependencies>();
+    await runUiAction(context, () async {
+      final details = controller.details;
+      if (details == null) return;
+      final invoice = details.invoice;
+      final previous = await deps.invoices.previousDebt(
+        invoiceId: invoice.id,
+        customerId: invoice.customerId,
+      );
+      final file = await deps.invoicePdf.create(
+        details: details,
+        previousDebt: previous,
+      );
+      await deps.sharer.shareFile(
+        file,
+        subject: 'فاتورة #${invoice.id}',
+        text: InvoiceCaption.build(invoice),
+      );
+    });
   }
 
   Future<void> _edit(BuildContext context) async {

@@ -4,6 +4,7 @@ import 'package:bkdash_sanitary_ware/core/database/db_schema.dart';
 import 'package:bkdash_sanitary_ware/core/errors/app_exception.dart';
 import 'package:bkdash_sanitary_ware/core/events/data_change_notifier.dart';
 import 'package:bkdash_sanitary_ware/core/formatting/app_dates.dart';
+import 'package:bkdash_sanitary_ware/core/formatting/money.dart';
 import 'package:bkdash_sanitary_ware/core/services/clock.dart';
 import 'package:bkdash_sanitary_ware/features/invoices/models/invoice.dart';
 import 'package:bkdash_sanitary_ware/features/invoices/models/invoice_draft.dart';
@@ -299,6 +300,24 @@ class InvoiceRepository {
         'يمكن تعديلها أو حذفها.',
       );
     }
+  }
+
+  /// What the customer still owed on his older invoices, before [invoiceId].
+  ///
+  /// Printed on the invoice so the customer sees one total, not only the part
+  /// of this sale. A walk-in invoice (no customer) has no earlier debt.
+  Future<Money> previousDebt({
+    required int invoiceId,
+    required int? customerId,
+  }) async {
+    if (customerId == null) return Money.zero;
+    final rows = await _database.db.rawQuery(
+      'SELECT IFNULL(SUM(total_cents - paid_cents), 0) AS debt '
+      'FROM ${DbTables.invoices} '
+      'WHERE customer_id = ? AND id < ? AND total_cents > paid_cents',
+      <Object?>[customerId, invoiceId],
+    );
+    return Money((rows.first['debt'] as int?) ?? 0);
   }
 
   /// Invoices, newest first. [fromDate] / [toDate] are "yyyy-MM-dd" (inclusive).
