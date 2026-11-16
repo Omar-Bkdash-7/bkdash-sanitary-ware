@@ -1,19 +1,16 @@
 import 'dart:math';
 
-/// Where the bridge program on the PC is, how to reach it and which Telegram
-/// bot reports the new invoices.
+/// Where the bridge program on the PC is, and how to reach it.
 ///
 /// Nothing here leaves the phone except to the address the user typed, so the
-/// whole link is LAN-only: no cloud account, no cloud database.
+/// whole link is LAN-only: no cloud account, no cloud database. The Telegram
+/// bot lives in its own settings ([TelegramSettings]) with encrypted secrets.
 final class SyncSettings {
   const SyncSettings({
     this.enabled = false,
     this.host = '',
     this.port = defaultPort,
     this.token = '',
-    this.telegramEnabled = false,
-    this.telegramToken = '',
-    this.telegramChatId = '',
     this.deviceId = '',
   });
 
@@ -22,9 +19,6 @@ final class SyncSettings {
     host: (json['host'] as String?) ?? '',
     port: (json['port'] as num?)?.toInt() ?? defaultPort,
     token: (json['token'] as String?) ?? '',
-    telegramEnabled: json['telegramEnabled'] == true,
-    telegramToken: (json['telegramToken'] as String?) ?? '',
-    telegramChatId: (json['telegramChatId'] as String?) ?? '',
     deviceId: (json['deviceId'] as String?) ?? '',
   );
 
@@ -41,39 +35,23 @@ final class SyncSettings {
   /// Shared secret of the bridge; the PC refuses requests without it.
   final String token;
 
-  /// Sends every new invoice to Telegram as soon as it is saved.
-  final bool telegramEnabled;
-  final String telegramToken;
-  final String telegramChatId;
-
   /// Identifies this phone, so the PC can recognise an invoice it already has
   /// when the phone retries a delivery.
   final String deviceId;
 
   bool get hasDesktop => enabled && host.trim().isNotEmpty;
 
-  bool get hasTelegram =>
-      telegramEnabled &&
-      telegramToken.trim().isNotEmpty &&
-      telegramChatId.trim().isNotEmpty;
-
   SyncSettings copyWith({
     bool? enabled,
     String? host,
     int? port,
     String? token,
-    bool? telegramEnabled,
-    String? telegramToken,
-    String? telegramChatId,
     String? deviceId,
   }) => SyncSettings(
     enabled: enabled ?? this.enabled,
     host: host ?? this.host,
     port: port ?? this.port,
     token: token ?? this.token,
-    telegramEnabled: telegramEnabled ?? this.telegramEnabled,
-    telegramToken: telegramToken ?? this.telegramToken,
-    telegramChatId: telegramChatId ?? this.telegramChatId,
     deviceId: deviceId ?? this.deviceId,
   );
 
@@ -82,9 +60,6 @@ final class SyncSettings {
     'host': host,
     'port': port,
     'token': token,
-    'telegramEnabled': telegramEnabled,
-    'telegramToken': telegramToken,
-    'telegramChatId': telegramChatId,
     'deviceId': deviceId,
   };
 

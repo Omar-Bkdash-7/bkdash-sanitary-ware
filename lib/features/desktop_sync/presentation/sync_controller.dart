@@ -47,11 +47,6 @@ class SyncController extends BaseController {
         '(${info.items} صنف • ${info.invoices} فاتورة)';
   });
 
-  Future<void> sendTelegramTest() => _guard(() async {
-    await _service.sendTelegramTest();
-    _info = 'وصلت رسالة تجريبية إلى Telegram.';
-  });
-
   Future<void> sendBackup() => _guard(() async {
     await _service.sendBackupToDesktop();
     _info = 'أُرسلت نسخة من قاعدة بيانات الهاتف إلى الكمبيوتر.';

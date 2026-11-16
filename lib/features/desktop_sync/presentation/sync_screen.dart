@@ -4,6 +4,7 @@ import 'package:bkdash_sanitary_ware/core/widgets/app_feedback.dart';
 import 'package:bkdash_sanitary_ware/core/widgets/load_state_view.dart';
 import 'package:bkdash_sanitary_ware/features/desktop_sync/models/sync_settings.dart';
 import 'package:bkdash_sanitary_ware/features/desktop_sync/presentation/sync_controller.dart';
+import 'package:bkdash_sanitary_ware/features/telegram/presentation/telegram_settings_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -32,20 +33,12 @@ class _SyncViewState extends State<_SyncView> {
   final TextEditingController _host = TextEditingController();
   final TextEditingController _port = TextEditingController();
   final TextEditingController _token = TextEditingController();
-  final TextEditingController _botToken = TextEditingController();
-  final TextEditingController _chatId = TextEditingController();
 
   bool _bound = false;
 
   @override
   void dispose() {
-    for (final controller in <TextEditingController>[
-      _host,
-      _port,
-      _token,
-      _botToken,
-      _chatId,
-    ]) {
+    for (final controller in <TextEditingController>[_host, _port, _token]) {
       controller.dispose();
     }
     super.dispose();
@@ -56,8 +49,6 @@ class _SyncViewState extends State<_SyncView> {
         host: _host.text.trim(),
         port: int.tryParse(_port.text.trim()) ?? SyncSettings.defaultPort,
         token: _token.text.trim(),
-        telegramToken: _botToken.text.trim(),
-        telegramChatId: _chatId.text.trim(),
       );
 
   @override
@@ -71,14 +62,12 @@ class _SyncViewState extends State<_SyncView> {
       _host.text = settings.host;
       _port.text = '${settings.port}';
       _token.text = settings.token;
-      _botToken.text = settings.telegramToken;
-      _chatId.text = settings.telegramChatId;
       _bound = true;
     }
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('الربط مع الكمبيوتر و Telegram'),
+        title: const Text('الربط مع الكمبيوتر'),
         bottom: busy
             ? const PreferredSize(
                 preferredSize: Size.fromHeight(3),
@@ -244,86 +233,24 @@ class _SyncViewState extends State<_SyncView> {
             ),
             const SizedBox(height: 12),
             _Section(
-              title: 'Telegram',
+              title: 'تيليجرام',
               children: [
-                SwitchListTile(
-                  secondary: const Icon(Icons.send_rounded),
-                  title: const Text('إرسال كل فاتورة جديدة إلى Telegram'),
+                ListTile(
+                  leading: const Icon(Icons.send_rounded),
+                  title: const Text('إعدادات تيليجرام'),
                   subtitle: const Text(
-                    'تصل رسالة منسّقة بمحتوى الفاتورة لحظة حفظها.',
+                    'رمز البوت، معرّف المحادثة، وإرسال الفاتورات والنسخ تلقائياً',
                   ),
-                  value: controller.settings.telegramEnabled,
-                  onChanged: busy
-                      ? null
-                      : (value) => _saveSettings(
-                          controller,
-                          _collect(controller).copyWith(telegramEnabled: value),
-                        ),
-                ),
-                const Divider(height: 1),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      TextField(
-                        controller: _botToken,
-                        enabled: !busy,
-                        textDirection: TextDirection.ltr,
-                        decoration: const InputDecoration(
-                          labelText: 'رمز البوت (Bot Token)',
-                          helperText:
-                              'من @BotFather في Telegram، مثل 123456:ABC...',
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      TextField(
-                        controller: _chatId,
-                        enabled: !busy,
-                        textDirection: TextDirection.ltr,
-                        decoration: const InputDecoration(
-                          labelText: 'معرّف المحادثة (Chat ID)',
-                          helperText:
-                              'رقم المحادثة التي تصلها الفواتير، مثل 123456789',
-                        ),
-                      ),
-                      const SizedBox(height: 14),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: FilledButton.icon(
-                              onPressed: busy
-                                  ? null
-                                  : () => runUiAction(
-                                      context,
-                                      () =>
-                                          controller.save(_collect(controller)),
-                                      successMessage: 'تم حفظ الإعدادات',
-                                    ),
-                              icon: const Icon(Icons.save_outlined),
-                              label: const Text('حفظ'),
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: OutlinedButton.icon(
-                              onPressed: busy
-                                  ? null
-                                  : () => runUiAction(
-                                      context,
-                                      controller.sendTelegramTest,
-                                    ),
-                              icon: const Icon(Icons.send_outlined),
-                              label: const Text('رسالة تجريبية'),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
+                  trailing: const Icon(Icons.chevron_left_rounded),
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => const TelegramSettingsScreen(),
+                    ),
                   ),
                 ),
               ],
             ),
+            const SizedBox(height: 12),
             if (controller.info != null) ...[
               const SizedBox(height: 12),
               Card(

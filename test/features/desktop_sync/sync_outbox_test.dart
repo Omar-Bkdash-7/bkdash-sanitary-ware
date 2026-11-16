@@ -1,9 +1,11 @@
 import 'package:bkdash_sanitary_ware/features/desktop_sync/data/sync_outbox.dart';
 import 'package:bkdash_sanitary_ware/features/desktop_sync/data/sync_settings_store.dart';
 import 'package:bkdash_sanitary_ware/features/desktop_sync/models/sync_settings.dart';
+import 'package:bkdash_sanitary_ware/features/telegram/data/telegram_settings_store.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../support/in_memory_key_value_store.dart';
+import '../../support/in_memory_secret_store.dart';
 
 void main() {
   group('SyncSettingsStore', () {
@@ -29,9 +31,6 @@ void main() {
           host: '192.168.1.20',
           port: 9000,
           token: 'secret',
-          telegramEnabled: true,
-          telegramToken: '123:abc',
-          telegramChatId: '555',
         ),
       );
       final loaded = await settingsStore.load();
@@ -40,24 +39,53 @@ void main() {
       expect(loaded.host, '192.168.1.20');
       expect(loaded.port, 9000);
       expect(loaded.hasDesktop, isTrue);
-      expect(loaded.hasTelegram, isTrue);
-      expect(loaded.telegramChatId, '555');
+      expect(loaded.token, 'secret');
       expect(loaded.deviceId, isNotEmpty);
     });
 
     test('يعتبر الربط معطلاً بلا عنوان أو بلا تفعيل', () {
-      const withoutHost = SyncSettings(
-        enabled: true,
-        telegramEnabled: true,
-        telegramToken: 'x',
-        telegramChatId: 'y',
-      );
+      const withoutHost = SyncSettings(enabled: true);
       expect(withoutHost.hasDesktop, isFalse);
-      expect(withoutHost.hasTelegram, isTrue);
+
+      const active = SyncSettings(enabled: true, host: '10.0.0.2');
+      expect(active.hasDesktop, isTrue);
 
       const disabled = SyncSettings(host: '10.0.0.2');
       expect(disabled.hasDesktop, isFalse);
     });
+
+    test(
+      'ينقل رمز البوت القديم إلى التخزين المشفّر ويحذفه من التفضيلات',
+      () async {
+        final preferences = InMemoryKeyValueStore();
+        final secrets = InMemorySecretStore();
+        await preferences.setString(
+          'sync.settings',
+          '{"enabled":true,"host":"10.0.0.5","port":8756,"token":"t",'
+              '"telegramEnabled":true,"telegramToken":"123:abc",'
+              '"telegramChatId":"555"}',
+        );
+        final store = SyncSettingsStore(
+          preferences,
+          telegram: TelegramSettingsStore(secrets, preferences),
+        );
+
+        await store.load();
+
+        final telegram = await TelegramSettingsStore(
+          secrets,
+          preferences,
+        ).load();
+        expect(telegram.token, '123:abc');
+        expect(telegram.chatId, '555');
+        expect(telegram.isConfigured, isTrue);
+        expect(preferences.values['sync.settings'], isNot(contains('123:abc')));
+        expect(
+          preferences.values['sync.settings'],
+          isNot(contains('telegramToken')),
+        );
+      },
+    );
   });
 
   group('SyncOutbox', () {

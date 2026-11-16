@@ -5,7 +5,9 @@ import 'package:bkdash_sanitary_ware/core/database/app_database.dart';
 import 'package:bkdash_sanitary_ware/core/events/data_change_notifier.dart';
 import 'package:bkdash_sanitary_ware/core/services/file_sharer.dart';
 import 'package:bkdash_sanitary_ware/core/services/share_plus_file_sharer.dart';
+import 'package:bkdash_sanitary_ware/core/storage/flutter_secure_secret_store.dart';
 import 'package:bkdash_sanitary_ware/core/storage/key_value_store.dart';
+import 'package:bkdash_sanitary_ware/core/storage/secret_store.dart';
 import 'package:bkdash_sanitary_ware/core/storage/shared_preferences_store.dart';
 import 'package:bkdash_sanitary_ware/features/backup/data/backup_file_picker.dart';
 import 'package:bkdash_sanitary_ware/features/backup/data/backup_service.dart';
@@ -24,6 +26,8 @@ import 'package:bkdash_sanitary_ware/features/security/data/biometric_authentica
 import 'package:bkdash_sanitary_ware/features/security/data/local_auth_biometric_authenticator.dart';
 import 'package:bkdash_sanitary_ware/features/security/data/security_repository.dart';
 import 'package:bkdash_sanitary_ware/features/settings/data/settings_repository.dart';
+import 'package:bkdash_sanitary_ware/features/telegram/data/telegram_service.dart';
+import 'package:bkdash_sanitary_ware/features/telegram/data/telegram_settings_store.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
@@ -45,6 +49,8 @@ final class AppDependencies {
     required this.biometrics,
     required this.backups,
     required this.snapshots,
+    required this.telegram,
+    required this.telegramSettings,
     required this.sync,
     required this.exports,
     required this.picker,
@@ -58,6 +64,9 @@ final class AppDependencies {
     );
     final changes = DataChangeNotifier();
     final KeyValueStore store = SharedPreferencesStore();
+    final SecretStore secrets = FlutterSecureSecretStore();
+    final telegramSettings = TelegramSettingsStore(secrets, store);
+    final telegram = TelegramService();
 
     final items = ItemRepository(database, changes);
     final customers = CustomerRepository(database, changes);
@@ -74,7 +83,9 @@ final class AppDependencies {
       snapshotDirectory: _snapshotsDirectory,
     );
     final sync = DesktopSyncService(
-      settingsStore: SyncSettingsStore(store),
+      settingsStore: SyncSettingsStore(store, telegram: telegramSettings),
+      telegram: telegram,
+      telegramSettings: telegramSettings,
       invoices: invoices,
       backups: backups,
       outbox: SyncOutbox(store),
@@ -96,6 +107,8 @@ final class AppDependencies {
       biometrics: LocalAuthBiometricAuthenticator(),
       backups: backups,
       snapshots: snapshots,
+      telegram: telegram,
+      telegramSettings: telegramSettings,
       sync: sync,
       exports: ExportService(
         items: items,
@@ -120,6 +133,8 @@ final class AppDependencies {
   final BiometricAuthenticator biometrics;
   final BackupService backups;
   final DbSnapshotService snapshots;
+  final TelegramService telegram;
+  final TelegramSettingsStore telegramSettings;
   final DesktopSyncService sync;
   final ExportService exports;
   final BackupFilePicker picker;
