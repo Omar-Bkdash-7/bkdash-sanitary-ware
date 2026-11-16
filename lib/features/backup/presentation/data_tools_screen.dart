@@ -224,8 +224,10 @@ class _DataToolsView extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('ستُستبدل كل البيانات الحالية (المخزون والزبائن '
-                  'والفواتير) ببيانات النسخة المحددة:'),
+              const Text(
+                'ستُستبدل كل البيانات الحالية (المخزون والزبائن '
+                'والفواتير) ببيانات النسخة المحددة:',
+              ),
               const SizedBox(height: 14),
               _CountRow(
                 label: 'الفواتير',
@@ -246,9 +248,9 @@ class _DataToolsView extends StatelessWidget {
               Text(
                 'تُحفظ نسخة من بياناتك الحالية تلقائياً قبل الاستبدال، '
                 'فتستطيع الرجوع إليها من «النسخ المحفوظة على الهاتف».',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: scheme.onSurfaceVariant,
-                ),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
               ),
             ],
           ),

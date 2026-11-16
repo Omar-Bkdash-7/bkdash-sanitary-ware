@@ -2,10 +2,13 @@ import 'package:bkdash_sanitary_ware/app/app_dependencies.dart';
 import 'package:bkdash_sanitary_ware/app/theme/app_theme.dart';
 import 'package:bkdash_sanitary_ware/core/formatting/app_dates.dart';
 import 'package:bkdash_sanitary_ware/core/formatting/money.dart';
+import 'package:bkdash_sanitary_ware/core/presentation/base_controller.dart';
+import 'package:bkdash_sanitary_ware/core/widgets/app_feedback.dart';
 import 'package:bkdash_sanitary_ware/core/widgets/empty_state.dart';
 import 'package:bkdash_sanitary_ware/core/widgets/load_state_view.dart';
 import 'package:bkdash_sanitary_ware/core/widgets/money_text.dart';
 import 'package:bkdash_sanitary_ware/features/invoices/models/invoice.dart';
+import 'package:bkdash_sanitary_ware/features/invoices/presentation/create_invoice_screen.dart';
 import 'package:bkdash_sanitary_ware/features/invoices/presentation/invoice_details_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -28,10 +31,82 @@ class InvoiceDetailsScreen extends StatelessWidget {
         )..load();
       },
       child: Scaffold(
-        appBar: AppBar(title: Text('فاتورة #$invoiceId')),
+        appBar: AppBar(
+          title: Text('فاتورة #$invoiceId'),
+          actions: [_InvoiceActions(invoiceId: invoiceId)],
+        ),
         body: const _InvoiceDetailsBody(),
       ),
     );
+  }
+}
+
+/// Edit and delete, the two ways an issued invoice can still change.
+class _InvoiceActions extends StatelessWidget {
+  const _InvoiceActions({required this.invoiceId});
+
+  final int invoiceId;
+
+  @override
+  Widget build(BuildContext context) {
+    final controller = context.watch<InvoiceDetailsController>();
+    if (controller.status != LoadStatus.ready || controller.details == null) {
+      return const SizedBox.shrink();
+    }
+    return PopupMenuButton<String>(
+      onSelected: (value) {
+        switch (value) {
+          case 'edit':
+            _edit(context);
+          case 'delete':
+            _delete(context, controller);
+        }
+      },
+      itemBuilder: (context) => [
+        const PopupMenuItem(value: 'edit', child: Text('تعديل الفاتورة')),
+        PopupMenuItem(
+          value: 'delete',
+          child: Text(
+            'حذف الفاتورة',
+            style: TextStyle(color: Theme.of(context).colorScheme.error),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _edit(BuildContext context) async {
+    final id = await Navigator.of(context).push<int>(
+      MaterialPageRoute<int>(
+        builder: (_) => CreateInvoiceScreen(invoiceId: invoiceId),
+      ),
+    );
+    if (id != null && context.mounted) {
+      showAppSnackBar(context, 'تم حفظ تعديلات الفاتورة #$id');
+    }
+  }
+
+  Future<void> _delete(
+    BuildContext context,
+    InvoiceDetailsController controller,
+  ) async {
+    final confirmed = await showConfirmDialog(
+      context,
+      title: 'حذف الفاتورة #$invoiceId',
+      message:
+          'ستُحذف الفاتورة نهائياً: تعود كميات أصنافها إلى المخزون، وتُلغى '
+          'دفعتها، ويعود حساب الزبون كما كان قبل إصدارها. لا يمكن التراجع.',
+      confirmLabel: 'حذف الفاتورة',
+      destructive: true,
+    );
+    if (!confirmed || !context.mounted) return;
+    final navigator = Navigator.of(context);
+    final deleted = await runUiAction(
+      context,
+      controller.deleteInvoice,
+      successMessage: 'حُذفت الفاتورة وعادت الكميات إلى المخزون',
+    );
+    if (deleted) navigator.pop();
   }
 }
 

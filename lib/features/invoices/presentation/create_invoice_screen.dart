@@ -3,6 +3,7 @@ import 'package:bkdash_sanitary_ware/app/theme/app_theme.dart';
 import 'package:bkdash_sanitary_ware/core/errors/app_exception.dart';
 import 'package:bkdash_sanitary_ware/core/formatting/ascii_digits.dart';
 import 'package:bkdash_sanitary_ware/core/formatting/money.dart';
+import 'package:bkdash_sanitary_ware/core/presentation/base_controller.dart';
 import 'package:bkdash_sanitary_ware/core/widgets/app_feedback.dart';
 import 'package:bkdash_sanitary_ware/core/widgets/form_fields.dart';
 import 'package:bkdash_sanitary_ware/core/widgets/load_state_view.dart';
@@ -15,9 +16,13 @@ import 'package:bkdash_sanitary_ware/features/invoices/presentation/item_picker_
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-/// Writes a new invoice. Closes with the invoice number when it was saved.
+/// Writes a new invoice, or rewrites the saved one when [invoiceId] is given.
+/// Closes with the invoice number when it was saved.
 class CreateInvoiceScreen extends StatelessWidget {
-  const CreateInvoiceScreen({super.key});
+  const CreateInvoiceScreen({super.key, this.invoiceId});
+
+  /// The invoice being edited; `null` for a new one.
+  final int? invoiceId;
 
   @override
   Widget build(BuildContext context) {
@@ -29,15 +34,18 @@ class CreateInvoiceScreen extends StatelessWidget {
           customers: deps.customers,
           invoices: deps.invoices,
           sync: deps.sync,
+          invoiceId: invoiceId,
         )..load();
       },
-      child: const _CreateInvoiceView(),
+      child: _CreateInvoiceView(invoiceId: invoiceId),
     );
   }
 }
 
 class _CreateInvoiceView extends StatefulWidget {
-  const _CreateInvoiceView();
+  const _CreateInvoiceView({this.invoiceId});
+
+  final int? invoiceId;
 
   @override
   State<_CreateInvoiceView> createState() => _CreateInvoiceViewState();
@@ -46,6 +54,11 @@ class _CreateInvoiceView extends StatefulWidget {
 class _CreateInvoiceViewState extends State<_CreateInvoiceView> {
   final TextEditingController _partialPaid = TextEditingController();
   final TextEditingController _notes = TextEditingController();
+
+  /// Fills the text fields from the saved invoice once, after it was loaded.
+  bool _bound = false;
+
+  bool get _isEditing => widget.invoiceId != null;
 
   @override
   void dispose() {
@@ -67,9 +80,11 @@ class _CreateInvoiceViewState extends State<_CreateInvoiceView> {
   Future<void> _confirmLeave() async {
     final leave = await showConfirmDialog(
       context,
-      title: 'تجاهل الفاتورة؟',
-      message: 'ستفقد الأصناف التي أضفتها إلى هذه الفاتورة.',
-      confirmLabel: 'تجاهل',
+      title: _isEditing ? 'إلغاء التعديل؟' : 'تجاهل الفاتورة؟',
+      message: _isEditing
+          ? 'ستبقى الفاتورة كما كانت قبل التعديل.'
+          : 'ستفقد الأصناف التي أضفتها إلى هذه الفاتورة.',
+      confirmLabel: _isEditing ? 'إلغاء التعديل' : 'تجاهل',
       destructive: true,
     );
     if (leave && mounted) Navigator.of(context).pop();
@@ -79,13 +94,22 @@ class _CreateInvoiceViewState extends State<_CreateInvoiceView> {
   Widget build(BuildContext context) {
     final controller = context.watch<CreateInvoiceController>();
     final draft = controller.draft;
+    if (!_bound && controller.status == LoadStatus.ready) {
+      _partialPaid.text = controller.draft.partialPaid.toInputString();
+      _notes.text = controller.draft.notes;
+      _bound = true;
+    }
     return PopScope(
       canPop: draft.lines.isEmpty,
       onPopInvokedWithResult: (didPop, _) {
         if (!didPop) _confirmLeave();
       },
       child: Scaffold(
-        appBar: AppBar(title: const Text('فاتورة جديدة')),
+        appBar: AppBar(
+          title: Text(
+            _isEditing ? 'تعديل الفاتورة #${widget.invoiceId}' : 'فاتورة جديدة',
+          ),
+        ),
         body: LoadStateView(
           status: controller.status,
           errorMessage: controller.errorMessage,
@@ -117,6 +141,7 @@ class _CreateInvoiceViewState extends State<_CreateInvoiceView> {
         bottomNavigationBar: _SummaryBar(
           draft: draft,
           saving: controller.isSaving,
+          isEditing: _isEditing,
           onSave: () => _save(controller),
         ),
       ),
@@ -498,10 +523,12 @@ class _SummaryBar extends StatelessWidget {
     required this.draft,
     required this.saving,
     required this.onSave,
+    this.isEditing = false,
   });
 
   final InvoiceDraft draft;
   final bool saving;
+  final bool isEditing;
   final VoidCallback onSave;
 
   @override
@@ -539,7 +566,7 @@ class _SummaryBar extends StatelessWidget {
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
                       : const Icon(Icons.check_rounded),
-                  label: const Text('حفظ الفاتورة'),
+                  label: Text(isEditing ? 'حفظ التعديلات' : 'حفظ الفاتورة'),
                 ),
               ),
             ],
