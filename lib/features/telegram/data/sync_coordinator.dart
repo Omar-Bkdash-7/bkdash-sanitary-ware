@@ -93,10 +93,9 @@ class SyncCoordinator {
 
   Timer? _debounce;
   Timer? _retryTimer;
-  bool _flushing = false;
+  Future<void>? _draining;
+  bool _rerun = false;
   bool _attached = false;
-
-  bool get isDelivering => _flushing;
 
   /// Registers for write reports and retries what a previous run left behind.
   Future<void> start() async {
@@ -106,6 +105,7 @@ class SyncCoordinator {
       await _enqueueSnapshot();
     }
     await flush();
+    await _queue.pruneSent();
     _retryTimer ??= Timer.periodic(retryInterval, (_) => unawaited(flush()));
     await _refreshPending();
   }
@@ -125,30 +125,54 @@ class SyncCoordinator {
   }
 
   /// Sends everything that is due; used at start-up and by the timer.
-  Future<void> flush() async {
-    if (_flushing) return;
-    _flushing = true;
+  ///
+  /// A call made while a pass is already sending does not just return: it asks
+  /// the running pass for another round. A job queued during a slow upload is
+  /// therefore delivered by that drain, instead of waiting for
+  /// [retryInterval], and an awaited call still means "everything due was
+  /// tried".
+  Future<void> flush() {
+    final running = _draining;
+    if (running != null) {
+      _rerun = true;
+      return running;
+    }
+    final future = _drain();
+    _draining = future;
+    return future;
+  }
+
+  Future<void> _drain() async {
     try {
-      final settings = await _settings.load();
-      if (!settings.isConfigured) return;
-      final jobs = await _queue.due(now: _clock());
-      for (final job in jobs) {
-        if (!SyncRetry.canRetry(job.attempts)) {
-          await _queue.markFailed(
-            job.id,
-            attempts: job.attempts,
-            error: job.lastError.isEmpty
-                ? 'تجاوز الإرسال عدد المحاولات المسموح.'
-                : job.lastError,
-          );
-          continue;
-        }
-        await _deliver(job, settings);
-      }
+      do {
+        _rerun = false;
+        await _flushOnce();
+      } while (_rerun);
     } finally {
-      _flushing = false;
+      _draining = null;
       await _refreshPending();
     }
+  }
+
+  Future<void> _flushOnce() async {
+    final settings = await _settings.load();
+    if (!settings.isConfigured) return;
+    final jobs = await _queue.due(now: _clock());
+    var sent = false;
+    for (final job in jobs) {
+      if (!SyncRetry.canRetry(job.attempts)) {
+        await _queue.markFailed(
+          job.id,
+          attempts: job.attempts,
+          error: job.lastError.isEmpty
+              ? 'تجاوز الإرسال عدد المحاولات المسموح.'
+              : job.lastError,
+        );
+        continue;
+      }
+      sent = await _deliver(job, settings) || sent;
+    }
+    if (sent) await _queue.pruneSent();
   }
 
   /// `true` while a snapshot is still owed.
@@ -233,7 +257,8 @@ class SyncCoordinator {
     }
   }
 
-  Future<void> _deliver(SyncJob job, TelegramSettings settings) async {
+  /// Returns `true` when the job reached Telegram.
+  Future<bool> _deliver(SyncJob job, TelegramSettings settings) async {
     try {
       switch (job.kind) {
         case SyncJobKind.database:
@@ -242,6 +267,7 @@ class SyncCoordinator {
           await _deliverInvoice(job, settings);
       }
       await _queue.markSent(job.id);
+      return true;
     } on TelegramException catch (error) {
       await _queue.markRetry(
         job.id,
@@ -251,6 +277,7 @@ class SyncCoordinator {
           error.retryAfter ?? SyncRetry.delayFor(job.attempts),
         ),
       );
+      return false;
     } on AppException catch (error) {
       await _queue.markRetry(
         job.id,
@@ -258,6 +285,7 @@ class SyncCoordinator {
         error: error.message,
         nextAttemptAt: _clock().add(SyncRetry.delayFor(job.attempts)),
       );
+      return false;
     } catch (error) {
       await _queue.markRetry(
         job.id,
@@ -265,6 +293,7 @@ class SyncCoordinator {
         error: 'تعذّر إرسال الملف: $error',
         nextAttemptAt: _clock().add(SyncRetry.delayFor(job.attempts)),
       );
+      return false;
     }
   }
 

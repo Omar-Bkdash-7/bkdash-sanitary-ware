@@ -42,6 +42,10 @@ abstract interface class SyncQueueStore {
   /// Makes every pending job due now (the manual "retry" button).
   Future<void> resetRetries({required DateTime now});
 
+  /// Deletes all but the newest [keep] sent rows, so the log file stops
+  /// growing while it still fills the send-log screen.
+  Future<void> pruneSent({int keep = 50});
+
   Future<void> remove(int id);
 
   Future<void> close();
@@ -195,6 +199,13 @@ CREATE TABLE outbox (
     },
     where: 'status IN (?, ?)',
     whereArgs: <Object?>[SyncJobStatus.pending.name, SyncJobStatus.failed.name],
+  );
+
+  @override
+  Future<void> pruneSent({int keep = 50}) => _db.rawDelete(
+    'DELETE FROM outbox WHERE status = ? AND id NOT IN '
+    '(SELECT id FROM outbox WHERE status = ? ORDER BY id DESC LIMIT ?)',
+    <Object?>[SyncJobStatus.sent.name, SyncJobStatus.sent.name, keep],
   );
 
   @override

@@ -125,6 +125,15 @@ final class FakeQueue implements SyncQueueStore {
   }
 
   @override
+  Future<void> pruneSent({int keep = 50}) async {
+    final sent = jobs.where((job) => job.status == SyncJobStatus.sent).toList();
+    if (sent.length <= keep) return;
+    for (final job in sent.take(sent.length - keep)) {
+      jobs.remove(job);
+    }
+  }
+
+  @override
   Future<void> remove(int id) async => jobs.removeAt(_index(id));
 
   @override
@@ -133,8 +142,16 @@ final class FakeQueue implements SyncQueueStore {
 
 /// A telegram client that records what it sent, or refuses on demand.
 final class FakeTelegram extends TelegramService {
+  /// Files that reached Telegram.
   final List<String> sent = <String>[];
+
+  /// Files whose upload started (before any [hold] gate).
+  final List<String> started = <String>[];
+
   String? failure;
+
+  /// Makes the next upload wait until the test completes it.
+  Completer<void>? hold;
 
   @override
   Future<void> sendDocument({
@@ -144,6 +161,10 @@ final class FakeTelegram extends TelegramService {
     String contentType = 'application/vnd.sqlite3',
     String? caption,
   }) async {
+    started.add(fileName);
+    final gate = hold;
+    hold = null;
+    if (gate != null) await gate.future;
     if (failure != null) throw TelegramException(failure!);
     sent.add(fileName);
   }
@@ -299,6 +320,47 @@ void main() {
     );
     sync.dispose();
   });
+
+  test(
+    'a write during a slow send goes out without waiting for the timer',
+    () async {
+      // The periodic retry is an hour away, so only the drain loop can deliver.
+      final sync = coordinator();
+      unawaited(sync.start());
+
+      final gate = Completer<void>();
+      telegram.hold = gate;
+      changes.reportWrite(DataWrite.invoice, invoiceId: 7);
+      await waitUntil(
+        () => telegram.started.contains('invoice_7.pdf'),
+        reason: 'first upload to start',
+      );
+
+      // A second sale is saved while the first PDF is still uploading.
+      changes.reportWrite(DataWrite.invoice, invoiceId: 8);
+      await waitUntil(
+        () =>
+            queue.jobs
+                .where((job) => job.kind == SyncJobKind.invoicePdf)
+                .length ==
+            2,
+        reason: 'second job queued',
+      );
+      // Let the queuing write reach `flush()` before the first upload finishes.
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      // The first upload is still in flight and the second has not started yet.
+      expect(telegram.sent, isEmpty);
+      expect(telegram.started, <String>['invoice_7.pdf']);
+
+      gate.complete();
+      await waitUntil(
+        () => telegram.sent.contains('invoice_8.pdf'),
+        reason: 'second upload in the same drain',
+      );
+      expect(telegram.sent, <String>['invoice_7.pdf', 'invoice_8.pdf']);
+      sync.dispose();
+    },
+  );
 
   test('a failed upload stays pending with a growing delay', () async {
     final sync = coordinator();
