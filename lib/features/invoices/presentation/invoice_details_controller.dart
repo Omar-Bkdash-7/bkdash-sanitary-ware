@@ -29,6 +29,10 @@ class InvoiceDetailsController extends BaseController {
     _details = await _repository.getDetails(invoiceId);
   });
 
+  /// Deletes the invoice; the stock and the customer balance go back to what
+  /// they were before it was issued (one transaction).
+  Future<void> deleteInvoice() => _repository.delete(invoiceId);
+
   void _onDataChanged() => unawaited(load());
 
   @override

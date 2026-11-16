@@ -176,9 +176,7 @@ final class AppDatabase {
     customers: await _count(database, DbTables.customers),
     products: await _count(database, DbTables.items),
     schemaVersion:
-        Sqflite.firstIntValue(
-          await database.rawQuery('PRAGMA user_version'),
-        ) ??
+        Sqflite.firstIntValue(await database.rawQuery('PRAGMA user_version')) ??
         0,
   );
 
