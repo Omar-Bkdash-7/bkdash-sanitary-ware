@@ -10,10 +10,11 @@ import 'package:bkdash_sanitary_ware/features/backup/models/backup_file.dart';
 import 'package:bkdash_sanitary_ware/features/desktop_sync/data/desktop_bridge_client.dart';
 import 'package:bkdash_sanitary_ware/features/desktop_sync/data/sync_outbox.dart';
 import 'package:bkdash_sanitary_ware/features/desktop_sync/data/sync_settings_store.dart';
-import 'package:bkdash_sanitary_ware/features/desktop_sync/data/telegram_notifier.dart';
 import 'package:bkdash_sanitary_ware/features/desktop_sync/models/invoice_sync_payload.dart';
 import 'package:bkdash_sanitary_ware/features/desktop_sync/models/sync_settings.dart';
 import 'package:bkdash_sanitary_ware/features/invoices/data/invoice_repository.dart';
+import 'package:bkdash_sanitary_ware/features/telegram/data/telegram_service.dart';
+import 'package:bkdash_sanitary_ware/features/telegram/data/telegram_settings_store.dart';
 import 'package:path/path.dart' as p;
 
 /// Connects the shop phone to Telegram and to the bridge program on the shop
@@ -31,7 +32,8 @@ class DesktopSyncService {
     required AppDatabase database,
     required Future<Directory> Function() backupsDirectory,
     DesktopBridgeClient? bridge,
-    TelegramNotifier? telegram,
+    required TelegramService telegram,
+    required TelegramSettingsStore telegramSettings,
     Clock? clock,
   }) : _settingsStore = settingsStore,
        _invoices = invoices,
@@ -40,7 +42,8 @@ class DesktopSyncService {
        _database = database,
        _backupsDirectory = backupsDirectory,
        _bridge = bridge ?? DesktopBridgeClient(),
-       _telegram = telegram ?? TelegramNotifier(),
+       _telegram = telegram,
+       _telegramSettings = telegramSettings,
        _clock = clock ?? DateTime.now;
 
   final SyncSettingsStore _settingsStore;
@@ -50,7 +53,8 @@ class DesktopSyncService {
   final AppDatabase _database;
   final Future<Directory> Function() _backupsDirectory;
   final DesktopBridgeClient _bridge;
-  final TelegramNotifier _telegram;
+  final TelegramService _telegram;
+  final TelegramSettingsStore _telegramSettings;
   final Clock _clock;
 
   Timer? _timer;
@@ -101,6 +105,7 @@ class DesktopSyncService {
     _flushing = true;
     try {
       final settings = await _settingsStore.load();
+      final telegram = await _telegramSettings.load();
       final entries = await _outbox.load();
       final kept = <OutboxEntry>[];
       for (var i = 0; i < entries.length; i++) {
@@ -108,16 +113,15 @@ class DesktopSyncService {
         final details = await _invoices.getDetails(entry.invoiceId);
         if (details == null) continue; // The invoice no longer exists.
 
-        var telegramDone = entry.telegramDone || !settings.hasTelegram;
+        var telegramDone = entry.telegramDone || !telegram.isConfigured;
         if (!telegramDone) {
           try {
-            await _telegram.send(
-              botToken: settings.telegramToken,
-              chatId: settings.telegramChatId,
+            await _telegram.sendMessage(
+              settings: telegram,
               text: InvoiceSyncPayload.telegramMessage(details: details),
             );
             telegramDone = true;
-          } on SyncException {
+          } on TelegramException {
             telegramDone = false;
           }
         }
@@ -152,23 +156,6 @@ class DesktopSyncService {
     } finally {
       _flushing = false;
     }
-  }
-
-  /// Sends a message to Telegram to prove the bot is configured correctly.
-  Future<void> sendTelegramTest() async {
-    final settings = await _settingsStore.load();
-    if (!settings.hasTelegram) {
-      throw const SyncException(
-        'فعّل Telegram وأدخل رمز البوت ومعرّف المحادثة أولاً.',
-      );
-    }
-    await _telegram.send(
-      botToken: settings.telegramToken,
-      chatId: settings.telegramChatId,
-      text:
-          '✅ تم ربط تطبيق بكداش بالـ Telegram بنجاح.\n'
-          'ستصل هنا فاتورة كل عملية بيع.',
-    );
   }
 
   Future<BridgeInfo> ping() async {
