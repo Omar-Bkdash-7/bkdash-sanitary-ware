@@ -12,7 +12,7 @@ import io.flutter.plugin.common.MethodChannel
 // local_auth (fingerprint) requires a FragmentActivity, not a plain FlutterActivity.
 class MainActivity : FlutterFragmentActivity() {
     private val channelName = "bkdash/public_backup"
-    private val folderName = "BKDash_Backups"
+    private val folderName = "Bkdash_Backups"
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
