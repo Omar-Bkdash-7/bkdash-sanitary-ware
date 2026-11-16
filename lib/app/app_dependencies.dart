@@ -9,6 +9,7 @@ import 'package:bkdash_sanitary_ware/core/storage/key_value_store.dart';
 import 'package:bkdash_sanitary_ware/core/storage/shared_preferences_store.dart';
 import 'package:bkdash_sanitary_ware/features/backup/data/backup_file_picker.dart';
 import 'package:bkdash_sanitary_ware/features/backup/data/backup_service.dart';
+import 'package:bkdash_sanitary_ware/features/backup/data/db_snapshot_service.dart';
 import 'package:bkdash_sanitary_ware/features/backup/data/export_service.dart';
 import 'package:bkdash_sanitary_ware/features/backup/data/file_selector_backup_picker.dart';
 import 'package:bkdash_sanitary_ware/features/customers/data/customer_repository.dart';
@@ -43,6 +44,7 @@ final class AppDependencies {
     required this.settings,
     required this.biometrics,
     required this.backups,
+    required this.snapshots,
     required this.sync,
     required this.exports,
     required this.picker,
@@ -51,7 +53,9 @@ final class AppDependencies {
 
   /// Opens the database and builds every repository and service.
   static Future<AppDependencies> create() async {
-    final database = await AppDatabase.open();
+    final database = await AppDatabase.open(
+      migrationSafetyDirectory: _migrationsDirectory,
+    );
     final changes = DataChangeNotifier();
     final KeyValueStore store = SharedPreferencesStore();
 
@@ -64,6 +68,10 @@ final class AppDependencies {
       database: database,
       changes: changes,
       backupsDirectory: _backupsDirectory,
+    );
+    final snapshots = DbSnapshotService(
+      database: database,
+      snapshotDirectory: _snapshotsDirectory,
     );
     final sync = DesktopSyncService(
       settingsStore: SyncSettingsStore(store),
@@ -87,6 +95,7 @@ final class AppDependencies {
       settings: SettingsRepository(store),
       biometrics: LocalAuthBiometricAuthenticator(),
       backups: backups,
+      snapshots: snapshots,
       sync: sync,
       exports: ExportService(
         items: items,
@@ -110,6 +119,7 @@ final class AppDependencies {
   final SettingsRepository settings;
   final BiometricAuthenticator biometrics;
   final BackupService backups;
+  final DbSnapshotService snapshots;
   final DesktopSyncService sync;
   final ExportService exports;
   final BackupFilePicker picker;
@@ -123,5 +133,17 @@ final class AppDependencies {
   static Future<Directory> _exportsDirectory() async {
     final temporary = await getTemporaryDirectory();
     return Directory(p.join(temporary.path, 'exports'));
+  }
+
+  /// Temporary snapshots waiting to be uploaded (deleted after the upload).
+  static Future<Directory> _snapshotsDirectory() async {
+    final temporary = await getTemporaryDirectory();
+    return Directory(p.join(temporary.path, 'snapshots'));
+  }
+
+  /// One copy of the database per schema upgrade, kept with the backups.
+  static Future<Directory> _migrationsDirectory() async {
+    final documents = await getApplicationDocumentsDirectory();
+    return Directory(p.join(documents.path, 'backups', 'before_upgrade'));
   }
 }
