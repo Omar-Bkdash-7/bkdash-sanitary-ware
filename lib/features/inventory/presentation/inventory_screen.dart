@@ -28,6 +28,7 @@ class InventoryScreen extends StatelessWidget {
         builder: (context) => _InventoryBody(controller: controller),
       ),
       floatingActionButton: FloatingActionButton.extended(
+        heroTag: 'inventory-add-item',
         onPressed: () => showItemFormSheet(context, controller: controller),
         icon: const Icon(Icons.add_rounded),
         label: const Text('إضافة صنف'),
