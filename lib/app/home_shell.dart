@@ -1,5 +1,6 @@
 import 'package:bkdash_sanitary_ware/app/app_dependencies.dart';
 import 'package:bkdash_sanitary_ware/core/constants/app_strings.dart';
+import 'package:bkdash_sanitary_ware/core/widgets/app_feedback.dart';
 import 'package:bkdash_sanitary_ware/core/widgets/bkdash_logo.dart';
 import 'package:bkdash_sanitary_ware/features/customers/presentation/customers_controller.dart';
 import 'package:bkdash_sanitary_ware/features/customers/presentation/customers_screen.dart';
@@ -13,6 +14,7 @@ import 'package:bkdash_sanitary_ware/features/security/presentation/security_con
 import 'package:bkdash_sanitary_ware/features/settings/presentation/settings_screen.dart';
 import 'package:bkdash_sanitary_ware/features/telegram/presentation/sync_log_screen.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 /// The unlocked app: five tabs and the controllers that feed them.
@@ -82,60 +84,78 @@ class _HomeScaffoldState extends State<_HomeScaffold> {
     _Tab(AppStrings.tabSettings, Icons.settings_outlined, Icons.settings),
   ];
 
+  /// Asks before leaving the app, so a stray back press does not close it.
+  Future<void> _confirmExit() async {
+    final exit = await showConfirmDialog(
+      context,
+      title: AppStrings.exitTitle,
+      message: AppStrings.exitMessage,
+      confirmLabel: AppStrings.exit,
+      destructive: true,
+    );
+    if (exit && mounted) await SystemNavigator.pop();
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Scaffold(
-      appBar: AppBar(
-        title: BkdashLogo(size: 34, isDark: isDark),
-        actions: [
-          ValueListenableBuilder<int>(
-            valueListenable: context
-                .read<AppDependencies>()
-                .syncCoordinator
-                .pending,
-            builder: (context, pending, _) => IconButton(
-              tooltip: pending == 0
-                  ? 'سجل الإرسال'
-                  : '$pending بانتظار الإرسال إلى تيليجرام',
-              icon: Icon(
-                pending == 0
-                    ? Icons.cloud_done_outlined
-                    : Icons.cloud_sync_outlined,
-              ),
-              onPressed: () => Navigator.of(context).push(
-                MaterialPageRoute<void>(builder: (_) => const SyncLogScreen()),
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _confirmExit();
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: BkdashLogo(size: 34, isDark: isDark),
+          actions: [
+            ValueListenableBuilder<int>(
+              valueListenable: context
+                  .read<AppDependencies>()
+                  .syncCoordinator
+                  .pending,
+              builder: (context, pending, _) => IconButton(
+                tooltip: pending == 0
+                    ? 'سجل الإرسال'
+                    : '$pending بانتظار الإرسال إلى تيليجرام',
+                icon: Icon(
+                  pending == 0
+                      ? Icons.cloud_done_outlined
+                      : Icons.cloud_sync_outlined,
+                ),
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(builder: (_) => const SyncLogScreen()),
+                ),
               ),
             ),
-          ),
-          IconButton(
-            tooltip: AppStrings.lockNow,
-            icon: const Icon(Icons.lock_outline_rounded),
-            onPressed: context.read<SecurityController>().lock,
-          ),
-        ],
-      ),
-      body: IndexedStack(
-        index: _index,
-        children: const [
-          InventoryScreen(),
-          InvoicesScreen(),
-          CustomersScreen(),
-          ReportsScreen(),
-          SettingsScreen(),
-        ],
-      ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _index,
-        onDestinationSelected: (index) => setState(() => _index = index),
-        destinations: [
-          for (final tab in _tabs)
-            NavigationDestination(
-              icon: Icon(tab.icon),
-              selectedIcon: Icon(tab.selectedIcon),
-              label: tab.label,
+            IconButton(
+              tooltip: AppStrings.lockNow,
+              icon: const Icon(Icons.lock_outline_rounded),
+              onPressed: context.read<SecurityController>().lock,
             ),
-        ],
+          ],
+        ),
+        body: IndexedStack(
+          index: _index,
+          children: const [
+            InventoryScreen(),
+            InvoicesScreen(),
+            CustomersScreen(),
+            ReportsScreen(),
+            SettingsScreen(),
+          ],
+        ),
+        bottomNavigationBar: NavigationBar(
+          selectedIndex: _index,
+          onDestinationSelected: (index) => setState(() => _index = index),
+          destinations: [
+            for (final tab in _tabs)
+              NavigationDestination(
+                icon: Icon(tab.icon),
+                selectedIcon: Icon(tab.selectedIcon),
+                label: tab.label,
+              ),
+          ],
+        ),
       ),
     );
   }

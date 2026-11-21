@@ -34,6 +34,9 @@ abstract final class AppStrings {
   static const String tabReports = 'التقارير';
   static const String tabSettings = 'الإعدادات';
   static const String lockNow = 'قفل التطبيق';
+  static const String exitTitle = 'الخروج من التطبيق؟';
+  static const String exitMessage = 'هل تريد إغلاق التطبيق الآن؟';
+  static const String exit = 'خروج';
 
   // Business info
   static const String piece = 'قطعة';
