@@ -1,25 +1,27 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""برنامج الكمبيوتر (Bridge) لتطبيق بكداش.
+"""Desktop bridge for the Bkdash app.
 
-يعمل على جهاز الكمبيوتر داخل شبكة المحل ويقوم بثلاثة أمور:
-  1. يستقبل كل فاتورة جديدة من الهاتف ويسجّلها في قاعدة بيانات SQLite
-     لها نفس جداول التطبيق (items / customers / invoices / invoice_items /
-     payments / customer_receipts / purchases / purchase_items /
-     customer_payouts / purchase_payments)، فيمكن لأي برنامج سطح مكتب أن يقرأها.
-  2. يستقبل نسخة كاملة من قاعدة بيانات الهاتف ويحفظها في مجلد backups.
-  3. يرسل قاعدة بياناته إلى الهاتف عند طلب "سحب البيانات (Extract)".
+Runs on the computer inside the shop network and does three things:
+  1. Receives every new invoice from the phone and stores it in a SQLite
+     database with the same tables as the app (items / customers / invoices /
+     invoice_items / payments / customer_receipts / purchases / purchase_items /
+     customer_payouts / purchase_payments), so any desktop program can read it.
+  2. Receives a full copy of the phone database and saves it in the backups
+     folder.
+  3. Sends its database to the phone when "Extract" is requested.
 
-لا يستخدم أي قاعدة بيانات سحابية: كل شيء داخل الشبكة المحلية.
+No cloud database is used: everything stays on the local network.
 
-التشغيل:
+Run:
     python bridge.py
 
-الخيارات:
-    --port 8756              المنفذ (نفسه في التطبيق)
-    --host 0.0.0.0           العنوان الذي يستمع عليه
-    --database bkdash.db     ملف قاعدة البيانات (يُنشأ تلقائياً)
-    --token  رمز-الربط       رمز مشترك (يُولّد ويُحفظ في token.txt إن لم يُعط)
+Options:
+    --port 8756              port (the same one the app uses)
+    --host 0.0.0.0           address to listen on
+    --database bkdash.db     database file (created automatically)
+    --token  <token>         shared token (generated and saved to token.txt
+                             when omitted)
 """
 
 from __future__ import annotations
@@ -38,16 +40,16 @@ from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
-# النصوص العربية في الطرفية: اطبع دائماً UTF-8 ولا تفشل مهما كانت الصفحة الرمزية.
+# Arabic text on the terminal: always print UTF-8 and never fail, whatever the code page.
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 VERSION = "1.0"
-MAX_BODY_BYTES = 256 * 1024 * 1024  # 256 MB: تكفي لأي قاعدة بيانات واقعية.
+MAX_BODY_BYTES = 256 * 1024 * 1024  # 256 MB: enough for any realistic database.
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
-# نفس مخطط التطبيق (lib/core/database/db_schema.dart) مع IF NOT EXISTS.
+# Same schema as the app (lib/core/database/db_schema.dart) with IF NOT EXISTS.
 SCHEMA = [
     """
     CREATE TABLE IF NOT EXISTS items (
@@ -184,7 +186,7 @@ SCHEMA = [
     "ON purchase_payments (purchase_id)",
     "CREATE INDEX IF NOT EXISTS idx_purchase_payments_date "
     "ON purchase_payments (paid_date)",
-    # جدول خاص بهذا البرنامج فقط: يمنع تسجيل الفاتورة نفسها مرتين.
+    # Table used by this program only: stops the same invoice being stored twice.
     """
     CREATE TABLE IF NOT EXISTS sync_log (
       uid TEXT PRIMARY KEY,
@@ -221,7 +223,7 @@ def timestamp():
 
 
 class BridgeState:
-    """قاعدة البيانات والعمليات التي يقوم بها البرنامج."""
+    """The database and the operations the program performs."""
 
     def __init__(self, db_path, backups_dir, token):
         self.db_path = os.path.abspath(db_path)
@@ -235,7 +237,7 @@ class BridgeState:
 
     def _ensure_schema(self):
         self.db.executescript(";\n".join(SCHEMA) + ";")
-        # التطبيق يرفض النسخة الأقدم من مخططه، ويرحّل نسخة 1 تلقائياً.
+        # The app refuses an older schema version and migrates version 1 automatically.
         version = self.db.execute("PRAGMA user_version").fetchone()[0]
         if version < 2:
             self.db.execute("PRAGMA user_version = 2")
@@ -359,7 +361,7 @@ class BridgeHandler(BaseHTTPRequestHandler):
         sys.stdout.write("[%s] %s\n" % (time.strftime("%H:%M:%S"), fmt % args))
         sys.stdout.flush()
 
-    # ------------------------------------------------------------------ أدوات
+    # --------------------------------------------------------------- helpers
     def _authorized(self):
         supplied = (self.headers.get("X-Bkdash-Token") or "").strip()
         if not supplied:
@@ -417,7 +419,7 @@ class BridgeHandler(BaseHTTPRequestHandler):
                 )
             else:
                 self._json(404, {"error": "مسار غير معروف."})
-        except Exception as error:  # noqa: BLE001 - الخطأ يُرسل للهاتف
+        except Exception as error:  # noqa: BLE001 - the error is sent back to the phone
             self._json(500, {"error": str(error)})
 
     # ------------------------------------------------------------------- POST
@@ -469,7 +471,7 @@ class BridgeServer(ThreadingHTTPServer):
 
 
 def lan_addresses():
-    """عناوين هذا الجهاز داخل الشبكة المحلية."""
+    """This machine's addresses on the local network."""
     found = []
     try:
         probe = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)

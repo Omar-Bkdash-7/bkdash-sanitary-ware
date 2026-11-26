@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""اختبار سريع لبرنامج الكمبيوتر (Bridge) بلا أي حزم إضافية.
+"""Quick smoke test for the desktop bridge with no extra packages.
 
-يشغّل `bridge.py` على منفذ حر ونسخة قاعدة بيانات مؤقتة، ثم يتحقق من
-البروتوكول الذي يستخدمه الهاتف:
+Starts `bridge.py` on a free port with a temporary database, then checks the
+protocol the phone uses:
 
     python tool/desktop_bridge/smoke_test.py
 
-يخرج بالرمز 0 عند النجاح، وغير الصفر عند أي فشل. يُستعمل في CI وأيضاً
-محلياً قبل تسليم نسخة جديدة.
+Exits with 0 on success and non-zero on any failure. Used in CI and locally
+before shipping a new build.
 """
 
 from __future__ import annotations
