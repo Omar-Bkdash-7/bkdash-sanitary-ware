@@ -6,7 +6,8 @@ Runs on the computer inside the shop network and does three things:
   1. Receives every new invoice from the phone and stores it in a SQLite
      database with the same tables as the app (items / customers / invoices /
      invoice_items / payments / customer_receipts / purchases / purchase_items /
-     customer_payouts / purchase_payments), so any desktop program can read it.
+     customer_payouts / purchase_payments / returns / return_items), so any
+     desktop program can read it.
   2. Receives a full copy of the phone database and saves it in the backups
      folder.
   3. Sends its database to the phone when "Extract" is requested.
@@ -192,6 +193,42 @@ SCHEMA = [
     "ON purchase_payments (purchase_id)",
     "CREATE INDEX IF NOT EXISTS idx_purchase_payments_date "
     "ON purchase_payments (paid_date)",
+    """
+    CREATE TABLE IF NOT EXISTS returns (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      invoice_id INTEGER NOT NULL REFERENCES invoices (id) ON DELETE CASCADE,
+      customer_id INTEGER REFERENCES customers (id) ON DELETE SET NULL,
+      customer_name TEXT NOT NULL,
+      return_date TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      total_cents INTEGER NOT NULL CHECK (total_cents >= 0),
+      cost_cents INTEGER NOT NULL DEFAULT 0 CHECK (cost_cents >= 0),
+      refund_cents INTEGER NOT NULL DEFAULT 0
+        CHECK (refund_cents >= 0 AND refund_cents <= total_cents),
+      notes TEXT NOT NULL DEFAULT ''
+    )""",
+    "CREATE INDEX IF NOT EXISTS idx_returns_invoice ON returns (invoice_id)",
+    "CREATE INDEX IF NOT EXISTS idx_returns_date ON returns (return_date)",
+    "CREATE INDEX IF NOT EXISTS idx_returns_customer ON returns (customer_id)",
+    """
+    CREATE TABLE IF NOT EXISTS return_items (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      return_id INTEGER NOT NULL REFERENCES returns (id) ON DELETE CASCADE,
+      invoice_item_id INTEGER REFERENCES invoice_items (id) ON DELETE SET NULL,
+      item_id INTEGER REFERENCES items (id) ON DELETE SET NULL,
+      item_name TEXT NOT NULL,
+      category TEXT NOT NULL,
+      sku TEXT NOT NULL,
+      container INTEGER NOT NULL DEFAULT 0 CHECK (container >= 0),
+      unit TEXT NOT NULL,
+      quantity INTEGER NOT NULL CHECK (quantity > 0),
+      unit_cost_cents INTEGER NOT NULL CHECK (unit_cost_cents >= 0),
+      unit_price_cents INTEGER NOT NULL CHECK (unit_price_cents >= 0)
+    )""",
+    "CREATE INDEX IF NOT EXISTS idx_return_items_return "
+    "ON return_items (return_id)",
+    "CREATE INDEX IF NOT EXISTS idx_return_items_line "
+    "ON return_items (invoice_item_id)",
     # Table used by this program only: stops the same invoice being stored twice.
     """
     CREATE TABLE IF NOT EXISTS sync_log (
@@ -248,8 +285,8 @@ class BridgeState:
         self.db.executescript(";\n".join(SCHEMA) + ";")
         # The app refuses an older schema version and migrates older files itself.
         version = self.db.execute("PRAGMA user_version").fetchone()[0]
-        if version < 3:
-            self.db.execute("PRAGMA user_version = 3")
+        if version < 4:
+            self.db.execute("PRAGMA user_version = 4")
         self.db.commit()
 
     def _upgrade_to_3(self):
