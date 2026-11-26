@@ -98,7 +98,9 @@ class _CreateInvoiceViewState extends State<_CreateInvoiceView> {
       // A new invoice starts with nothing paid; leave the field empty instead
       // of showing a zero. The draft still treats the amount as zero.
       final partialPaid = controller.draft.partialPaid;
-      _partialPaid.text = partialPaid.isPositive ? partialPaid.toInputString() : '';
+      _partialPaid.text = partialPaid.isPositive
+          ? partialPaid.toInputString()
+          : '';
       _notes.text = controller.draft.notes;
       _bound = true;
     }

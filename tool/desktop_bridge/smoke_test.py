@@ -74,6 +74,10 @@ REQUIRED_TABLES = {
     "invoice_items",
     "payments",
     "customer_receipts",
+    "purchases",
+    "purchase_items",
+    "customer_payouts",
+    "purchase_payments",
 }
 
 failures = []
@@ -176,7 +180,7 @@ def main():
             connection = sqlite3.connect(pulled)
             try:
                 version = connection.execute("PRAGMA user_version").fetchone()[0]
-                check("the database version is the one the app accepts", version == 1, str(version))
+                check("the database version is the one the app accepts", version == 2, str(version))
                 tables = {row[0] for row in connection.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
                 check("every app table exists", REQUIRED_TABLES <= tables, ", ".join(sorted(tables)))
                 check("the database passes SQLite's integrity check", connection.execute("PRAGMA integrity_check").fetchone()[0] == "ok")

@@ -24,6 +24,7 @@ import 'package:bkdash_sanitary_ware/features/inventory/data/item_repository.dar
 import 'package:bkdash_sanitary_ware/features/invoices/data/invoice_pdf_service.dart';
 import 'package:bkdash_sanitary_ware/features/invoices/data/invoice_repository.dart';
 import 'package:bkdash_sanitary_ware/features/invoices/data/payment_repository.dart';
+import 'package:bkdash_sanitary_ware/features/purchases/data/purchase_repository.dart';
 import 'package:bkdash_sanitary_ware/features/reports/data/report_repository.dart';
 import 'package:bkdash_sanitary_ware/features/security/data/biometric_authenticator.dart';
 import 'package:bkdash_sanitary_ware/features/security/data/local_auth_biometric_authenticator.dart';
@@ -48,6 +49,7 @@ final class AppDependencies {
     required this.customers,
     required this.invoices,
     required this.payments,
+    required this.purchases,
     required this.reports,
     required this.security,
     required this.settings,
@@ -82,6 +84,7 @@ final class AppDependencies {
     final customers = CustomerRepository(database, changes);
     final invoices = InvoiceRepository(database, changes);
     final payments = PaymentRepository(database, changes);
+    final purchases = PurchaseRepository(database, changes);
 
     final backups = BackupService(
       database: database,
@@ -136,7 +139,8 @@ final class AppDependencies {
       customers: customers,
       invoices: invoices,
       payments: payments,
-      reports: ReportRepository(database, invoices),
+      purchases: purchases,
+      reports: ReportRepository(database, invoices, purchases),
       security: SecurityRepository(store),
       settings: SettingsRepository(store),
       biometrics: LocalAuthBiometricAuthenticator(),
@@ -152,6 +156,7 @@ final class AppDependencies {
       exports: ExportService(
         items: items,
         invoices: invoices,
+        purchases: purchases,
         customers: customers,
         exportDirectory: _exportsDirectory,
       ),
@@ -166,6 +171,7 @@ final class AppDependencies {
   final CustomerRepository customers;
   final InvoiceRepository invoices;
   final PaymentRepository payments;
+  final PurchaseRepository purchases;
   final ReportRepository reports;
   final SecurityRepository security;
   final SettingsRepository settings;

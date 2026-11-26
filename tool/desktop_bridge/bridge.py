@@ -5,7 +5,8 @@
 يعمل على جهاز الكمبيوتر داخل شبكة المحل ويقوم بثلاثة أمور:
   1. يستقبل كل فاتورة جديدة من الهاتف ويسجّلها في قاعدة بيانات SQLite
      لها نفس جداول التطبيق (items / customers / invoices / invoice_items /
-     payments / customer_receipts)، فيمكن لأي برنامج سطح مكتب أن يقرأها.
+     payments / customer_receipts / purchases / purchase_items /
+     customer_payouts / purchase_payments)، فيمكن لأي برنامج سطح مكتب أن يقرأها.
   2. يستقبل نسخة كاملة من قاعدة بيانات الهاتف ويحفظها في مجلد backups.
   3. يرسل قاعدة بياناته إلى الهاتف عند طلب "سحب البيانات (Extract)".
 
@@ -124,6 +125,65 @@ SCHEMA = [
     )""",
     "CREATE INDEX IF NOT EXISTS idx_payments_date ON payments (paid_date)",
     "CREATE INDEX IF NOT EXISTS idx_payments_invoice ON payments (invoice_id)",
+    """
+    CREATE TABLE IF NOT EXISTS purchases (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      customer_id INTEGER NOT NULL REFERENCES customers (id) ON DELETE RESTRICT,
+      customer_name TEXT NOT NULL,
+      customer_phone TEXT NOT NULL DEFAULT '',
+      purchase_date TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      total_cents INTEGER NOT NULL CHECK (total_cents >= 0),
+      paid_cents INTEGER NOT NULL DEFAULT 0
+        CHECK (paid_cents >= 0 AND paid_cents <= total_cents),
+      notes TEXT NOT NULL DEFAULT ''
+    )""",
+    "CREATE INDEX IF NOT EXISTS idx_purchases_date ON purchases (purchase_date)",
+    "CREATE INDEX IF NOT EXISTS idx_purchases_customer ON purchases (customer_id)",
+    """
+    CREATE TABLE IF NOT EXISTS purchase_items (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      purchase_id INTEGER NOT NULL REFERENCES purchases (id) ON DELETE CASCADE,
+      item_id INTEGER REFERENCES items (id) ON DELETE SET NULL,
+      item_name TEXT NOT NULL,
+      category TEXT NOT NULL,
+      sku TEXT NOT NULL,
+      unit TEXT NOT NULL,
+      quantity INTEGER NOT NULL CHECK (quantity > 0),
+      unit_cost_cents INTEGER NOT NULL CHECK (unit_cost_cents >= 0),
+      previous_quantity INTEGER NOT NULL DEFAULT 0
+        CHECK (previous_quantity >= 0),
+      previous_cost_cents INTEGER NOT NULL DEFAULT 0
+        CHECK (previous_cost_cents >= 0)
+    )""",
+    "CREATE INDEX IF NOT EXISTS idx_purchase_items_purchase "
+    "ON purchase_items (purchase_id)",
+    """
+    CREATE TABLE IF NOT EXISTS customer_payouts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      customer_id INTEGER NOT NULL REFERENCES customers (id) ON DELETE CASCADE,
+      amount_cents INTEGER NOT NULL CHECK (amount_cents > 0),
+      note TEXT NOT NULL DEFAULT '',
+      paid_at TEXT NOT NULL,
+      paid_date TEXT NOT NULL
+    )""",
+    "CREATE INDEX IF NOT EXISTS idx_customer_payouts_customer "
+    "ON customer_payouts (customer_id)",
+    "CREATE INDEX IF NOT EXISTS idx_customer_payouts_date "
+    "ON customer_payouts (paid_date)",
+    """
+    CREATE TABLE IF NOT EXISTS purchase_payments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      purchase_id INTEGER NOT NULL REFERENCES purchases (id) ON DELETE CASCADE,
+      payout_id INTEGER REFERENCES customer_payouts (id) ON DELETE SET NULL,
+      amount_cents INTEGER NOT NULL CHECK (amount_cents > 0),
+      paid_at TEXT NOT NULL,
+      paid_date TEXT NOT NULL
+    )""",
+    "CREATE INDEX IF NOT EXISTS idx_purchase_payments_purchase "
+    "ON purchase_payments (purchase_id)",
+    "CREATE INDEX IF NOT EXISTS idx_purchase_payments_date "
+    "ON purchase_payments (paid_date)",
     # جدول خاص بهذا البرنامج فقط: يمنع تسجيل الفاتورة نفسها مرتين.
     """
     CREATE TABLE IF NOT EXISTS sync_log (
@@ -175,10 +235,10 @@ class BridgeState:
 
     def _ensure_schema(self):
         self.db.executescript(";\n".join(SCHEMA) + ";")
-        # التطبيق يرفض أي نسخة لا يكون إصدارها 1.
+        # التطبيق يرفض النسخة الأقدم من مخططه، ويرحّل نسخة 1 تلقائياً.
         version = self.db.execute("PRAGMA user_version").fetchone()[0]
-        if version == 0:
-            self.db.execute("PRAGMA user_version = 1")
+        if version < 2:
+            self.db.execute("PRAGMA user_version = 2")
         self.db.commit()
 
     def _count(self, table):

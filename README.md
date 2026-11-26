@@ -1,14 +1,14 @@
-# Bkdash Sanitary Ware · بكداش
+# Bkdash Sanitary Ware · Bkdash
 
 [![CI](https://github.com/Omar-Bkdash-7/bkdash-sanitary-ware/actions/workflows/ci.yaml/badge.svg)](https://github.com/Omar-Bkdash-7/bkdash-sanitary-ware/actions/workflows/ci.yaml)
 [![Flutter](https://img.shields.io/badge/Flutter-3.47.9-02569B?logo=flutter&logoColor=white)](https://flutter.dev)
 [![Dart](https://img.shields.io/badge/Dart-3.13-0175C2?logo=dart&logoColor=white)](https://dart.dev)
 [![Platform](https://img.shields.io/badge/Platform-Android%207.0%2B-3DDC84?logo=android&logoColor=white)](#requirements)
 
-An offline-first Flutter app for running a sanitary-ware shop: inventory, invoices, customers, debts,
-payments and reports. Everything lives in a local SQLite database on the phone — no cloud, no account,
-no internet needed to sell. Invoices become Arabic A4 PDFs, and every change can be mirrored to a
-private Telegram chat and to a small Python bridge on the shop computer.
+An offline-first Flutter app for running a sanitary-ware shop: inventory, invoices, purchases from
+customers, debts, payments and reports. Everything lives in a local SQLite database on the phone — no
+cloud, no account, no internet needed to sell. Invoices become Arabic A4 PDFs, and every change can be
+mirrored to a private Telegram chat and to a small Python bridge on the shop computer.
 
 > The interface is entirely Arabic (RTL). Code, comments and this document are English.
 
@@ -38,15 +38,16 @@ private Telegram chat and to a small Python bridge on the shop computer.
 | Area | What it does |
 |---|---|
 | **Sales** | Create an invoice with cash, transfer, credit or partial payment, edit or delete an issued invoice, and take payments against customer debt. |
-| **Inventory** | Items with cost/sale price, unit, category and stock; low-stock flag at or below 5 units; stock is restored automatically when an invoice is deleted or rewritten. |
-| **Customers and debts** | A real customer table, per-customer balance, previous debt carried into the invoice, and payments allocated to the oldest invoices first. |
-| **Reports** | Dashboard charts and sales/profit summaries over a chosen period. |
+| **Purchases from customers** | Buy pieces from a customer into the stock, either by adding to an existing item at a weighted-average cost or by creating a new item in the same transaction. What is still owed to the customer can be paid later. |
+| **Inventory** | Items with cost/sale price, unit, category and stock; low-stock flag at or below 5 units; stock is restored automatically when an invoice or a still-last purchase is deleted or rewritten. |
+| **Customers and debts** | A real customer table, per-customer statement of sales and purchases, a single net balance, previous debt carried into the invoice, and settlements allocated to the oldest invoices or purchases first. |
+| **Reports** | Dashboard charts, sales/profit summaries, purchases made from customers and the net cash of a chosen period. |
 | **Security** | Four-digit PIN stored as a salted PBKDF2-HMAC-SHA256 hash, escalating lock-out after wrong attempts, optional fingerprint unlock, automatic lock after 30 seconds in the background. |
 | **Invoice PDF** | A4, right-to-left, embedded Amiri font, shop header, item table with a repeated header on page breaks, totals, previous debt, notes and a page footer. |
 | **Backups** | Manual `.db` snapshot to save or share, validated restore with a before/after count preview, and automatic rolling copies kept in a public phone folder. |
 | **Telegram** | Each saved invoice goes to a private chat as a PDF, and one database snapshot follows a burst of changes. Failed uploads wait in an outbox and retry. |
 | **Desktop bridge** | Optional Python service on the shop computer that receives invoices over the local Wi-Fi and keeps its own copy of the same database. |
-| **Exports** | Excel-friendly CSV for inventory, invoices, sold items, and customers with debts. |
+| **Exports** | Excel-friendly CSV for inventory, invoices, sold items, purchases, bought items, and customer balances. |
 
 ---
 
@@ -155,11 +156,19 @@ Money is never a `double`: `Money` stores integer cents, so totals and debts can
   either all succeed or all roll back.
 - **Stock cannot go negative.** Selling more than the shelf holds is refused.
 - **Payments settle the oldest invoices first** and cannot exceed the outstanding debt.
-- **Issued invoices are snapshots.** Renaming an item or changing its price never rewrites old invoices;
-  they keep the name, unit and prices they were issued with.
-- **Guarded invoice edits.** An invoice that was partly settled by a later debt payment cannot be edited
-  or deleted, because that payment may have covered several invoices and would corrupt the balance.
-- **A customer with invoices cannot be deleted.**
+- **Purchases are the mirror image of sales.** They add pieces to the stock in the same transaction and
+  make the shop owe the customer. Existing stock gets a weighted-average cost, so the inventory value
+  follows what was actually paid.
+- **One customer balance.** The net balance is the unpaid sales minus the unpaid purchases. A receipt is
+  only accepted when the customer owes on that net balance; a payout is only accepted when the shop owes.
+  Each direction is then allocated to the oldest invoices or purchases, so no settlement crosses sides.
+- **Issued invoices and purchases are snapshots.** Renaming an item or changing its price never rewrites
+  old documents; they keep the name, unit and prices they were issued with.
+- **Guarded document edits.** An invoice that was partly settled by a later debt payment cannot be edited
+  or deleted, because that payment may have covered several invoices and would corrupt the balance. A
+  purchase that was settled later cannot be deleted for the same reason, and a purchase is also kept when
+  its pieces were sold or a newer purchase touched the same item.
+- **A customer with invoices or purchases cannot be deleted.**
 
 ---
 
@@ -186,9 +195,9 @@ Everything is reachable from **Settings → Backup and export**.
 
 **Restore is guarded.** Pick a `.db` file and the app validates it (real SQLite, `quick_check` ok,
 expected tables present, schema not newer than the app), then shows a confirmation with the current and
-incoming counts of invoices, customers and items. Before replacing anything it takes a safety backup of
-the current data, then swaps the file through a temporary copy and rename, reopens the database and
-refreshes the app.
+incoming counts of invoices, purchases, customers and items. Before replacing anything it takes a safety
+backup of the current data, then swaps the file through a temporary copy and rename, reopens the database
+and refreshes the app.
 
 **Rolling copies that survive uninstall.** With the switch in **Settings → Backup and export → automatic
 copies**, each snapshot is also written to `Download/BKDash_Backups` through MediaStore — no all-files
@@ -225,7 +234,7 @@ What is sent, and when:
 Every snapshot caption ends with a machine-readable line for the Python importer:
 
 ```
-#bkdash_sync v=1 schema=1 ts=2026-11-16T09:41:12Z invoices=250 customers=87 products=312
+#bkdash_sync v=1 schema=2 ts=2026-11-16T09:41:12Z invoices=250 customers=87 products=312
 ```
 
 ---
@@ -256,15 +265,16 @@ Windows; the Arabic title goes in the caption.
 ## Testing and CI
 
 ```bash
-flutter test                 # 112 unit and widget tests
+flutter test                 # 135 unit and widget tests
 flutter test --coverage      # what CI uploads
 ```
 
-Covered: money arithmetic, dates, Arabic-aware search, invoice draft rules, payment allocation, report
-models, CSV writing and exports, PIN hashing against reference vectors, the lock controller (attempts,
-lock-out, biometrics, auto-lock, PIN change), the numeric pad, Telegram multipart bodies, caption limits
-and masking, the sync coordinator (immediate PDF, one snapshot per burst, backoff, restart recovery, and a
-write that lands during a slow upload), the rolling public copies, and PDF generation.
+Covered: money arithmetic, dates, Arabic-aware search, invoice and purchase draft rules, invoice and
+purchase payment allocation, customer net balances, report models, schema migrations, CSV writing and
+exports, PIN hashing against reference vectors, the lock controller (attempts, lock-out, biometrics,
+auto-lock, PIN change), the numeric pad, Telegram multipart bodies, caption limits and masking, the sync
+coordinator (immediate PDF, one snapshot per burst, backoff, restart recovery, and a write that lands
+during a slow upload), the rolling public copies, and PDF generation.
 
 `.github/workflows/ci.yaml` runs on pushes to `main`, on every pull request and on demand:
 

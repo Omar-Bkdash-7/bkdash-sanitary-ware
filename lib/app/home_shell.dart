@@ -44,6 +44,7 @@ class HomeShell extends StatelessWidget {
           create: (_) => CustomersController(
             customers: deps.customers,
             payments: deps.payments,
+            purchases: deps.purchases,
             changes: deps.changes,
           )..load(),
         ),
@@ -123,7 +124,9 @@ class _HomeScaffoldState extends State<_HomeScaffold> {
                       : Icons.cloud_sync_outlined,
                 ),
                 onPressed: () => Navigator.of(context).push(
-                  MaterialPageRoute<void>(builder: (_) => const SyncLogScreen()),
+                  MaterialPageRoute<void>(
+                    builder: (_) => const SyncLogScreen(),
+                  ),
                 ),
               ),
             ),
