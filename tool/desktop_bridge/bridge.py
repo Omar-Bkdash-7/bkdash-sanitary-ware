@@ -56,7 +56,8 @@ SCHEMA = [
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       category TEXT NOT NULL,
       name TEXT NOT NULL,
-      sku TEXT NOT NULL UNIQUE,
+      sku TEXT NOT NULL,
+      container INTEGER NOT NULL DEFAULT 0 CHECK (container >= 0),
       unit TEXT NOT NULL DEFAULT 'قطعة',
       cost_cents INTEGER NOT NULL CHECK (cost_cents >= 0),
       price_cents INTEGER NOT NULL CHECK (price_cents >= 0),
@@ -64,7 +65,10 @@ SCHEMA = [
       notes TEXT NOT NULL DEFAULT '',
       created_at TEXT NOT NULL
     )""",
+    "CREATE UNIQUE INDEX IF NOT EXISTS idx_items_sku_container "
+    "ON items (sku, container)",
     "CREATE INDEX IF NOT EXISTS idx_items_category ON items (category)",
+    "CREATE INDEX IF NOT EXISTS idx_items_container ON items (container)",
     """
     CREATE TABLE IF NOT EXISTS customers (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -100,6 +104,7 @@ SCHEMA = [
       item_name TEXT NOT NULL,
       category TEXT NOT NULL,
       sku TEXT NOT NULL,
+      container INTEGER NOT NULL DEFAULT 0 CHECK (container >= 0),
       unit TEXT NOT NULL,
       quantity INTEGER NOT NULL CHECK (quantity > 0),
       unit_cost_cents INTEGER NOT NULL CHECK (unit_cost_cents >= 0),
@@ -150,6 +155,7 @@ SCHEMA = [
       item_name TEXT NOT NULL,
       category TEXT NOT NULL,
       sku TEXT NOT NULL,
+      container INTEGER NOT NULL DEFAULT 0 CHECK (container >= 0),
       unit TEXT NOT NULL,
       quantity INTEGER NOT NULL CHECK (quantity > 0),
       unit_cost_cents INTEGER NOT NULL CHECK (unit_cost_cents >= 0),
@@ -205,9 +211,9 @@ INSERT INTO invoices (
 
 INSERT_LINE = """
 INSERT INTO invoice_items (
-  invoice_id, item_id, item_name, category, sku, unit, quantity,
-  unit_cost_cents, unit_price_cents
-) VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?)
+  invoice_id, item_id, item_name, category, sku, container,
+  unit, quantity, unit_cost_cents, unit_price_cents
+) VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, ?)
 """
 
 
@@ -236,12 +242,68 @@ class BridgeState:
         self._ensure_schema()
 
     def _ensure_schema(self):
+        # An existing file is upgraded before the schema below runs: its new
+        # index on `container` cannot be created on a table that lacks it yet.
+        self._upgrade_to_3()
         self.db.executescript(";\n".join(SCHEMA) + ";")
-        # The app refuses an older schema version and migrates version 1 automatically.
+        # The app refuses an older schema version and migrates older files itself.
         version = self.db.execute("PRAGMA user_version").fetchone()[0]
-        if version < 2:
-            self.db.execute("PRAGMA user_version = 2")
+        if version < 3:
+            self.db.execute("PRAGMA user_version = 3")
         self.db.commit()
+
+    def _upgrade_to_3(self):
+        """Makes a SKU unique per container instead of globally.
+
+        Mirrors DbSchema.upgradeTo3 of the app: SQLite can only remove the old
+        UNIQUE (sku) constraint by rebuilding the table. A new file has no
+        tables yet, and SCHEMA creates the current shape.
+        """
+        existing = {row[1] for row in self.db.execute("PRAGMA table_info(items)")}
+        if not existing:
+            return
+        for table in ("invoice_items", "purchase_items"):
+            columns = {
+                row[1] for row in self.db.execute("PRAGMA table_info(%s)" % table)
+            }
+            if columns and "container" not in columns:
+                self.db.execute(
+                    "ALTER TABLE %s ADD COLUMN container INTEGER NOT NULL "
+                    "DEFAULT 0 CHECK (container >= 0)" % table
+                )
+        if "container" in existing:
+            return
+        # Foreign keys stay off so dropping the table keeps the line links: the
+        # rows are copied with the same ids, so every item_id stays valid.
+        self.db.execute("PRAGMA foreign_keys = OFF")
+        self.db.executescript(
+            """
+CREATE TABLE items_new (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  category TEXT NOT NULL,
+  name TEXT NOT NULL,
+  sku TEXT NOT NULL,
+  container INTEGER NOT NULL DEFAULT 0 CHECK (container >= 0),
+  unit TEXT NOT NULL DEFAULT 'قطعة',
+  cost_cents INTEGER NOT NULL CHECK (cost_cents >= 0),
+  price_cents INTEGER NOT NULL CHECK (price_cents >= 0),
+  quantity INTEGER NOT NULL DEFAULT 0 CHECK (quantity >= 0),
+  notes TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL
+);
+INSERT INTO items_new (id, category, name, sku, container, unit,
+  cost_cents, price_cents, quantity, notes, created_at)
+SELECT id, category, name, sku, 0, unit, cost_cents, price_cents,
+  quantity, notes, created_at FROM items;
+DROP TABLE items;
+ALTER TABLE items_new RENAME TO items;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_items_sku_container
+  ON items (sku, container);
+CREATE INDEX IF NOT EXISTS idx_items_category ON items (category);
+CREATE INDEX IF NOT EXISTS idx_items_container ON items (container);
+"""
+        )
+        self.db.execute("PRAGMA foreign_keys = ON")
 
     def _count(self, table):
         return self.db.execute("SELECT COUNT(*) FROM %s" % table).fetchone()[0]
@@ -295,6 +357,7 @@ class BridgeState:
                             str(line.get("name") or ""),
                             str(line.get("category") or ""),
                             str(line.get("sku") or ""),
+                            max(as_int(line.get("container")), 0),
                             str(line.get("unit") or "قطعة"),
                             max(as_int(line.get("quantity"), 1), 1),
                             max(as_int(line.get("unit_cost_cents")), 0),
